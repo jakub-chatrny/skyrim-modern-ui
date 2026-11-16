@@ -1,0 +1,13 @@
+.env
+
+# plugin
+plugin/build/
+plugin/vcpkg_installed/
+compile_commands.json
+
+# ui
+node_modules/
+ui/dist/
+
+.DS_Store
+.vscode/

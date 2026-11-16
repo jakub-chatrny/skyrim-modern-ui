@@ -1,0 +1,88 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "_vcpkg",
+            "hidden": true,
+            "toolchainFile": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
+                "VCPKG_OVERLAY_PORTS": "${sourceDir}/cmake/ports",
+                "VCPKG_MANIFEST_MODE": "ON",
+                "VCPKG_INSTALL_OPTIONS": "--allow-unsupported",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "_ninja",
+            "hidden": true,
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_MAKE_PROGRAM": "ninja"
+            }
+        },
+        {
+            "name": "_clang-cl-linux",
+            "hidden": true,
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-llvm-mingw-static",
+                "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/clang-cl-cross.cmake",
+                "VCPKG_APPLOCAL_DEPS": "OFF"
+            }
+        },
+        {
+            "name": "_msvc",
+            "hidden": true,
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+                "VCPKG_HOST_TRIPLET": "x64-windows-static",
+                "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded"
+            }
+        },
+        {
+            "name": "release-linux",
+            "displayName": "Release (Linux, clang-cl + xwin)",
+            "description": "Cross-compile for Skyrim SE/AE from Linux using clang-cl, lld-link and xwin headers",
+            "inherits": [
+                "_vcpkg",
+                "_ninja",
+                "_clang-cl-linux"
+            ],
+            "binaryDir": "${sourceDir}/build/release-linux",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "release-windows",
+            "displayName": "Release (Windows, MSVC + Ninja)",
+            "description": "Build for Skyrim SE/AE on Windows using MSVC and Ninja",
+            "inherits": [
+                "_vcpkg",
+                "_ninja",
+                "_msvc"
+            ],
+            "binaryDir": "${sourceDir}/build/msvc",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "release-linux",
+            "displayName": "Release (Linux)",
+            "configurePreset": "release-linux"
+        },
+        {
+            "name": "release-windows",
+            "displayName": "Release (Windows)",
+            "configurePreset": "release-windows"
+        }
+    ]
+}

@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skyrim-modern-ui/bridge.schema.json",
+  "title": "Skyrim Modern UI bridge",
+  "description": "Single source of truth for messages between the SKSE plugin and the web UI. Plugin -> UI: Snapshot (JSON string passed to window.smuiReceive). UI -> plugin: Command (JSON string passed to window.smuiCommand). Keep ui/src/bridge/types.ts in sync by hand.",
+  "oneOf": [{ "$ref": "#/$defs/Snapshot" }, { "$ref": "#/$defs/Command" }],
+  "$defs": {
+    "Snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "player", "vitals", "resistances", "damage", "skills", "equipment"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "player": { "$ref": "#/$defs/Player" },
+        "vitals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["health", "stamina", "magicka"],
+          "properties": {
+            "health": { "$ref": "#/$defs/Gauge" },
+            "stamina": { "$ref": "#/$defs/Gauge" },
+            "magicka": { "$ref": "#/$defs/Gauge" }
+          }
+        },
+        "survival": {
+          "description": "Only present when Survival Mode or a needs mod is active.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "energy": { "$ref": "#/$defs/Gauge" },
+            "hunger": { "$ref": "#/$defs/Gauge" },
+            "thirst": { "$ref": "#/$defs/Gauge" },
+            "warmth": { "$ref": "#/$defs/Gauge" }
+          }
+        },
+        "resistances": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["armor", "magic", "fire", "frost", "shock", "poison", "disease"],
+          "properties": {
+            "armor": { "type": "number" },
+            "magic": { "type": "number" },
+            "fire": { "type": "number" },
+            "frost": { "type": "number" },
+            "shock": { "type": "number" },
+            "poison": { "type": "number" },
+            "disease": { "type": "number" }
+          }
+        },
+        "damage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rightHand", "leftHand", "ranged", "meleeSpeed", "rangedSpeed", "magicPower"],
+          "properties": {
+            "rightHand": { "type": "number" },
+            "leftHand": { "type": "number" },
+            "ranged": { "type": "number" },
+            "meleeSpeed": { "type": "number" },
+            "rangedSpeed": { "type": "number" },
+            "magicPower": { "type": "number" }
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name", "level"],
+            "properties": {
+              "id": { "type": "string", "description": "Actor value name, e.g. OneHanded" },
+              "name": { "type": "string" },
+              "level": { "type": "integer" },
+              "progress": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        },
+        "equipment": {
+          "description": "One entry per slot; null when the slot is empty.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["head", "body", "hands", "feet", "leftHand", "rightHand", "mask", "cloak", "neck", "ring", "ranged", "ammo"],
+          "properties": {
+            "head": { "$ref": "#/$defs/SlotItem" },
+            "body": { "$ref": "#/$defs/SlotItem" },
+            "hands": { "$ref": "#/$defs/SlotItem" },
+            "feet": { "$ref": "#/$defs/SlotItem" },
+            "leftHand": { "$ref": "#/$defs/SlotItem" },
+            "rightHand": { "$ref": "#/$defs/SlotItem" },
+            "mask": { "$ref": "#/$defs/SlotItem" },
+            "cloak": { "$ref": "#/$defs/SlotItem" },
+            "neck": { "$ref": "#/$defs/SlotItem" },
+            "ring": { "$ref": "#/$defs/SlotItem" },
+            "ranged": { "$ref": "#/$defs/SlotItem" },
+            "ammo": { "$ref": "#/$defs/SlotItem" }
+          }
+        }
+      }
+    },
+    "Player": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "level", "xpProgress", "gold", "carryWeight"],
+      "properties": {
+        "name": { "type": "string" },
+        "level": { "type": "integer" },
+        "xpProgress": { "type": "number", "minimum": 0, "maximum": 1 },
+        "gold": { "type": "integer" },
+        "carryWeight": { "$ref": "#/$defs/Gauge" }
+      }
+    },
+    "Gauge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current", "max"],
+      "properties": {
+        "current": { "type": "number" },
+        "max": { "type": "number" }
+      }
+    },
+    "SlotItem": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["formId", "name", "type", "icon", "stats"],
+          "properties": {
+            "formId": { "type": "string", "pattern": "^0x[0-9A-F]{8}$" },
+            "name": { "type": "string" },
+            "type": { "enum": ["armor", "clothing", "jewelry", "weapon", "shield", "spell", "ammo", "torch"] },
+            "icon": { "type": "string", "description": "Icon key; generic per-type icons first, per-item later." },
+            "stats": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["label", "value"],
+                "properties": {
+                  "label": { "type": "string" },
+                  "value": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": { "type": { "enum": ["ready", "close"] } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "formId"],
+          "properties": {
+            "type": { "const": "equip" },
+            "formId": { "type": "string" },
+            "slot": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "slot"],
+          "properties": {
+            "type": { "const": "unequip" },
+            "slot": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "index"],
+          "properties": {
+            "type": { "const": "switchOutfit" },
+            "index": { "type": "integer", "minimum": 0, "maximum": 3 }
+          }
+        }
+      ]
+    }
+  }
+}

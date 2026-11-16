@@ -1,0 +1,12 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+    "name": "skyrimmodernui",
+    "version-string": "0.0.1",
+    "builtin-baseline": "8f363bdc11359ede4bc51e5eb32a2617538049c8",
+    "dependencies": [
+        "spdlog",
+        "directxtk",
+        "rapidcsv",
+        "nlohmann-json"
+    ]
+}

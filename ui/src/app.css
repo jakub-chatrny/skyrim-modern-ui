@@ -1,0 +1,42 @@
+/* Placeholder theme. Kept to plain, old-WebKit-safe CSS on purpose: the page
+   runs in Ultralight, not Chromium. Add newer features only after checking
+   them in game. */
+:root {
+  --text: #e8e4da;
+  --muted: #8d897f;
+  --panel: rgba(10, 10, 12, 0.92);
+  --line: rgba(255, 255, 255, 0.12);
+  --accent: #c8a45a;
+  font-family: system-ui, sans-serif;
+  font-size: 16px;
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  /* Transparent: the game shows through wherever the UI does not draw. */
+  background: transparent;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+button:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}

@@ -1,0 +1,73 @@
+# Windows build of the plugin (plan phase 1, option B: fallback for the Linux
+# cross-compile, and the build used for releases). Not run yet - untested.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths: ['plugin/**', '.github/workflows/build.yml']
+  pull_request:
+    paths: ['plugin/**', '.github/workflows/build.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plugin-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: plugin
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,C:\\vcpkg-cache,readwrite"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - uses: actions/cache@v4
+        with:
+          path: C:\vcpkg-cache
+          key: vcpkg-${{ hashFiles('plugin/vcpkg.json', 'plugin/cmake/ports/**') }}
+          restore-keys: vcpkg-
+
+      - name: Bootstrap vcpkg
+        run: |
+          New-Item -ItemType Directory -Force C:\vcpkg-cache | Out-Null
+          .\lib\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Configure
+        run: cmake --preset release-windows
+
+      - name: Build
+        run: cmake --build --preset release-windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SkyrimModernUI-plugin
+          path: |
+            plugin/build/msvc/*.dll
+            plugin/build/msvc/*.pdb
+
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SkyrimModernUI-view
+          path: ui/dist
