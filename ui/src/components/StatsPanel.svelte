@@ -4,6 +4,8 @@
   let { snapshot }: { snapshot: Snapshot } = $props()
 
   const gauge = (g: Gauge) => `${Math.round(g.current)} / ${Math.round(g.max)}`
+  // Whole numbers as they are, everything else to two decimals (weapon speeds).
+  const number = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(Math.abs(v) < 10 ? 2 : 0))
 
   const groups = $derived([
     {
@@ -15,11 +17,11 @@
       : []),
     {
       title: 'Resistances',
-      rows: Object.entries(snapshot.resistances).map(([k, v]) => [k, String(v)]),
+      rows: Object.entries(snapshot.resistances).map(([k, v]) => [k, number(v)]),
     },
     {
       title: 'Damage',
-      rows: Object.entries(snapshot.damage).map(([k, v]) => [k, String(v)]),
+      rows: Object.entries(snapshot.damage).map(([k, v]) => [k, number(v)]),
     },
     {
       title: 'Skills',

@@ -51,6 +51,7 @@ add_commonlibsse_plugin(
         src/Plugin.cpp
         src/CharacterMenu.cpp
         src/CameraStage.cpp
+        src/Equipment.cpp
         src/Snapshot.cpp
         "${CMAKE_CURRENT_BINARY_DIR}/src/version.rc"
     USE_ADDRESS_LIBRARY)
@@ -66,7 +67,8 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
 # PrismaUI_API.h calls GetModuleHandle with a wide string.
-target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
+# NOMINMAX: keep the Windows headers from defining min/max macros over std::min/std::max.
+target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".dll")
 

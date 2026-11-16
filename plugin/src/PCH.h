@@ -9,8 +9,13 @@
 #include <spdlog/spdlog.h>
 #pragma warning(pop)
 
+#include <algorithm>
+#include <atomic>
+#include <charconv>
 #include <chrono>
+#include <format>
 #include <memory>
+#include <optional>
 #include <string>
 
 using namespace std::literals;

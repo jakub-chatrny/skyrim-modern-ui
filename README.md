@@ -10,11 +10,11 @@ A Skyrim SE mod that replaces the character sheet with a modern web UI
 | 0 — Prisma UI under Proton | **works with caveats** (needs a current VC++ redistributable in the prefix) — [docs/phase-0-prisma-proton.md](docs/phase-0-prisma-proton.md) |
 | 1 — Build toolchain | Linux cross-compile works (clang-cl + xwin); self-built plugin loads and opens its view in game |
 | 2 — Character rendering spike | **done**: real player with the world hidden and a black backdrop — [docs/phase-2-character-rendering.md](docs/phase-2-character-rendering.md) |
-| 3 — Data bridge | schema + fixture + skeleton on both sides |
+| 3 — Data bridge | **done**: full snapshot, equip / unequip from the UI, live updates (confirmed in game and in the plugin log, 2026-11-16) |
 | 4 — Character screen UI | placeholder layout on mock data, builds |
 | 5 — Outfits | not started |
 
-Phases 0 to 2 are done; phase 3 (data bridge) is the next step.
+Phases 0 to 3 are done; phase 4 (the Character screen UI from the Figma design) is next.
 
 ## Layout
 
@@ -78,6 +78,19 @@ In game: **F4** toggles the screen (`TOGGLE_KEY` in
 Defined in [shared/schema/bridge.schema.json](shared/schema/bridge.schema.json);
 TypeScript mirror in `ui/src/bridge/types.ts`, C++ producer in
 `plugin/src/Snapshot.cpp`.
+
+The plugin pushes a snapshot when the screen opens, when the UI says `ready`, and whenever the player's
+equipment changes while the screen is open. Each snapshot is also written to `SkyrimModernUI.log`, and so is
+everything the page writes to its console (`[ui]` lines), including script errors.
+
+What the numbers mean (see `plugin/src/Snapshot.cpp`, `plugin/src/Equipment.cpp`):
+
+- Item armor and damage are the values the game's own menus show (skill, perks, tempering applied).
+- A bow or crossbow is reported in `ranged`, not `rightHand`; the game has no separate ranged slot.
+- `cloak` and `mask` use the common mod slots (46/47 and 44/55); the base game has nothing for them.
+- `damage.magicPower` is the Destruction power modifier for now; the design does not define it yet.
+- Skill names are English constants; `survival` is not sent.
+- Equip / unequip ignore which exact copy of an item is meant (tempered vs plain); spells cannot be unequipped yet.
 
 - plugin → UI: `window.smuiReceive(json)` with a `Snapshot`
 - UI → plugin: `window.smuiCommand(json)` with a `Command`

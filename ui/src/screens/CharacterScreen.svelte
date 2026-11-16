@@ -1,7 +1,7 @@
 <script lang="ts">
   // Placeholder layout only: the regions from the plan, fed by real bridge
   // data. The Figma design is implemented in phase 4.
-  import type { Bridge, SlotId, Snapshot } from '../bridge/types'
+  import type { Bridge, SlotId, SlotItem, Snapshot } from '../bridge/types'
   import EquipmentSlot from '../components/EquipmentSlot.svelte'
   import StatsPanel from '../components/StatsPanel.svelte'
   import TopBar from '../components/TopBar.svelte'
@@ -11,6 +11,27 @@
   const left: SlotId[] = ['head', 'body', 'hands', 'feet', 'leftHand', 'rightHand']
   const right: SlotId[] = ['mask', 'cloak', 'neck', 'ring', 'ranged', 'ammo']
   const outfits = [0, 1, 2, 3]
+
+  // Phase 3 stand-in for an inventory list: remember what was last taken off
+  // each slot so an empty slot can put it back. Proves the equip command.
+  let lastWorn = $state<Partial<Record<SlotId, SlotItem>>>({})
+
+  $effect(() => {
+    for (const slot of [...left, ...right]) {
+      const item = snapshot.equipment[slot]
+      if (item) lastWorn[slot] = item
+    }
+  })
+
+  function onSlot(slot: SlotId) {
+    const item = snapshot.equipment[slot]
+    console.log(`[ui] slot click: ${slot} (${item ? item.name : 'empty'})`)
+    if (item) {
+      bridge.send({ type: 'unequip', slot })
+    } else if (lastWorn[slot]) {
+      bridge.send({ type: 'equip', formId: lastWorn[slot].formId, slot })
+    }
+  }
 </script>
 
 <div class="screen">
@@ -25,7 +46,7 @@
   <main>
     <section class="slots">
       {#each left as slot}
-        <EquipmentSlot {slot} item={snapshot.equipment[slot]} onunequip={() => bridge.send({ type: 'unequip', slot })} />
+        <EquipmentSlot {slot} item={snapshot.equipment[slot]} previous={lastWorn[slot]} onclick={() => onSlot(slot)} />
       {/each}
     </section>
 
@@ -37,7 +58,7 @@
 
     <section class="slots">
       {#each right as slot}
-        <EquipmentSlot {slot} item={snapshot.equipment[slot]} onunequip={() => bridge.send({ type: 'unequip', slot })} />
+        <EquipmentSlot {slot} item={snapshot.equipment[slot]} previous={lastWorn[slot]} onclick={() => onSlot(slot)} />
       {/each}
     </section>
 

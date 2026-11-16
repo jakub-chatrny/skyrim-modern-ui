@@ -3,6 +3,7 @@
 #include "CharacterMenu.h"
 
 #include "CameraStage.h"
+#include "Equipment.h"
 #include "PrismaUI_API.h"
 #include "Snapshot.h"
 
@@ -18,8 +19,10 @@ namespace
 
 	void PushSnapshot()
 	{
-		// dump() twice: the second turns the JSON text into a JS string literal.
-		const auto payload = nlohmann::json(Snapshot::Build().dump()).dump();
+		const auto snapshot = Snapshot::Build().dump();
+		logger::debug("Snapshot: {}", snapshot);
+		// dump() again: turns the JSON text into a JS string literal.
+		const auto payload = nlohmann::json(snapshot).dump();
 		const auto script = "window.smuiReceive && window.smuiReceive(" + payload + ")";
 		prisma->Invoke(view, script.c_str());
 	}
@@ -117,12 +120,53 @@ namespace
 				if (isOpen) {
 					Toggle("close command from UI");
 				}
+			} else if (type == "unequip") {
+				const auto slot = Equipment::SlotFromName(command.value("slot", ""));
+				if (!slot) {
+					logger::warn("unequip: unknown slot in {}", text);
+				} else {
+					Equipment::Unequip(*slot);
+				}
+				// The fresh snapshot follows from the game's equip event.
+			} else if (type == "equip") {
+				// formId arrives as "0x0001397E".
+				const auto id = command.value("formId", "");
+				RE::FormID formID = 0;
+				const auto [end, error] = std::from_chars(id.data() + (id.starts_with("0x") ? 2 : 0), id.data() + id.size(), formID, 16);
+				if (error != std::errc{} || end != id.data() + id.size()) {
+					logger::warn("equip: bad formId in {}", text);
+				} else {
+					Equipment::Equip(formID, Equipment::SlotFromName(command.value("slot", "")));
+				}
 			} else {
-				// TODO(phase 3): equip / unequip.  TODO(phase 5): switchOutfit.
+				// TODO(phase 5): switchOutfit.
 				logger::info("Command not implemented yet: {}", text);
 			}
 		});
 	}
+
+	// Equipment can change while the screen is open (our own commands, scripts,
+	// other mods). Push one fresh snapshot per burst of equip events, on the next
+	// main-thread task run, by which time the game has applied the change.
+	class EquipSink : public RE::BSTEventSink<RE::TESEquipEvent>
+	{
+	public:
+		RE::BSEventNotifyControl ProcessEvent(const RE::TESEquipEvent* a_event, RE::BSTEventSource<RE::TESEquipEvent>*) override
+		{
+			if (isOpen && a_event && a_event->actor && a_event->actor->IsPlayerRef() && !_pending.exchange(true)) {
+				SKSE::GetTaskInterface()->AddTask([this]() {
+					_pending = false;
+					if (isOpen) {
+						PushSnapshot();
+					}
+				});
+			}
+			return RE::BSEventNotifyControl::kContinue;
+		}
+
+	private:
+		std::atomic<bool> _pending = false;
+	};
 
 	class HotkeySink : public RE::BSTEventSink<RE::InputEvent*>
 	{
@@ -173,11 +217,32 @@ void CharacterMenu::Install()
 	view = prisma->CreateView(VIEW_PATH, [](PrismaView a_view) {
 		logger::info("View DOM ready ({})", a_view);
 	});
+
+	// Everything the page writes to its console, including uncaught script
+	// errors, goes into our log. There is no browser devtools in game.
+	if (auto* prisma2 = PRISMA_UI_API::RequestPluginAPI<PRISMA_UI_API::IVPrismaUI2>()) {
+		prisma2->RegisterConsoleCallback(view, [](PrismaView, PRISMA_UI_API::ConsoleMessageLevel a_level, const char* a_message) {
+			using Level = PRISMA_UI_API::ConsoleMessageLevel;
+			const auto* text = a_message ? a_message : "";
+			if (a_level == Level::Error) {
+				logger::error("[ui] {}", text);
+			} else if (a_level == Level::Warning) {
+				logger::warn("[ui] {}", text);
+			} else {
+				logger::info("[ui] {}", text);
+			}
+		});
+	} else {
+		logger::warn("Prisma UI is too old for console forwarding; UI errors will not be logged");
+	}
 	prisma->RegisterJSListener(view, "smuiCommand", OnCommand);
 	prisma->Hide(view);
 
 	static HotkeySink sink;
 	RE::BSInputDeviceManager::GetSingleton()->AddEventSink(&sink);
+
+	static EquipSink equipSink;
+	RE::ScriptEventSourceHolder::GetSingleton()->AddEventSink<RE::TESEquipEvent>(&equipSink);
 
 	logger::info("Character screen installed, toggle key scan code {:#x}", TOGGLE_KEY);
 }
