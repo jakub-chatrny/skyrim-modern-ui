@@ -40,7 +40,16 @@ if ! $ui_only && [[ -z "$dll" ]]; then
         echo "~/.xwin is missing. See README.md, 'Plugin toolchain'." >&2
         exit 1
     fi
-    (cd "$ROOT/plugin" && cmake --preset release-linux && cmake --build --preset release-linux)
+    # The build prints thousands of warning lines from CommonLibSSE-NG headers;
+    # keep them in a log and show only the outcome.
+    log="$ROOT/plugin/build/build.log"
+    mkdir -p "$ROOT/plugin/build"
+    if ! (cd "$ROOT/plugin" && cmake --preset release-linux && cmake --build --preset release-linux) >"$log" 2>&1; then
+        grep -n -A8 -E "error( |:)|FAILED" "$log" | head -n 80 >&2 || true
+        echo "Plugin build failed. Full log: $log" >&2
+        exit 1
+    fi
+    echo "    ok (log: $log)"
     dll="$ROOT/plugin/build/release-linux/SkyrimModernUI.dll"
 fi
 
@@ -53,6 +62,11 @@ cp -r "$ROOT/ui/dist/." "$view_dir/"
 if [[ -n "$dll" ]]; then
     cp "$dll" "$DEPLOY_DIR/SKSE/Plugins/SkyrimModernUI.dll"
     [[ -f "${dll%.dll}.pdb" ]] && cp "${dll%.dll}.pdb" "$DEPLOY_DIR/SKSE/Plugins/"
+fi
+
+# Tunables: never overwrite, the copy in the game folder is edited while testing.
+if [[ ! -f "$DEPLOY_DIR/SKSE/Plugins/SkyrimModernUI.json" ]]; then
+    cp "$ROOT/plugin/config/SkyrimModernUI.json" "$DEPLOY_DIR/SKSE/Plugins/"
 fi
 
 echo "Done. Start the game through SKSE; log: scripts/logs.sh"

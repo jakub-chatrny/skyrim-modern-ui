@@ -1,0 +1,20 @@
+{
+  "camera": {
+    "enabled": true,
+    "hideWorld": true,
+    "blackFog": true,
+    "hideHud": true,
+    "pauseGame": false,
+    "distance": 190,
+    "offsetX": 0,
+    "offsetZ": -25,
+    "rotation": 0,
+    "pitch": 0.1,
+    "fov": 0,
+    "backdrop": true,
+    "backdropDistance": 150,
+    "backdropHeight": 70,
+    "backdropScale": 10,
+    "noFog": true
+  }
+}

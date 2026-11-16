@@ -50,6 +50,7 @@ add_commonlibsse_plugin(
     SOURCES
         src/Plugin.cpp
         src/CharacterMenu.cpp
+        src/CameraStage.cpp
         src/Snapshot.cpp
         "${CMAKE_CURRENT_BINARY_DIR}/src/version.rc"
     USE_ADDRESS_LIBRARY)

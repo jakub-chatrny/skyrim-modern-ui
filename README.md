@@ -9,13 +9,12 @@ A Skyrim SE mod that replaces the character sheet with a modern web UI
 |---|---|
 | 0 — Prisma UI under Proton | **works with caveats** (needs a current VC++ redistributable in the prefix) — [docs/phase-0-prisma-proton.md](docs/phase-0-prisma-proton.md) |
 | 1 — Build toolchain | Linux cross-compile works (clang-cl + xwin); self-built plugin loads and opens its view in game |
-| 2 — Character rendering spike | not started |
+| 2 — Character rendering spike | **done**: real player with the world hidden and a black backdrop — [docs/phase-2-character-rendering.md](docs/phase-2-character-rendering.md) |
 | 3 — Data bridge | schema + fixture + skeleton on both sides |
 | 4 — Character screen UI | placeholder layout on mock data, builds |
 | 5 — Outfits | not started |
 
-The plan says not to start a phase before the previous one is done. The
-scaffold only prepares the ground; phase 0 is still the next real step.
+Phases 0 to 2 are done; phase 3 (data bridge) is the next step.
 
 ## Layout
 

@@ -2,6 +2,7 @@
 
 #include "CharacterMenu.h"
 
+#include "CameraStage.h"
 #include "PrismaUI_API.h"
 #include "Snapshot.h"
 
@@ -32,8 +33,10 @@ namespace
 	{
 		logger::info("Open");
 		isOpen = true;
+		const auto stage = CameraStage::LoadConfig();
+		CameraStage::Enter(stage);
 		prisma->Show(view);
-		if (!prisma->Focus(view, true)) {  // pauseGame = true
+		if (!prisma->Focus(view, stage.pauseGame)) {
 			logger::warn("Prisma UI refused focus");
 		}
 		PushSnapshot();
@@ -45,6 +48,7 @@ namespace
 		isOpen = false;
 		prisma->Unfocus(view);
 		prisma->Hide(view);
+		CameraStage::Leave();
 	}
 
 	// Opening and closing in quick succession leaves Prisma's cursor menu (FocusMenu) open
@@ -52,8 +56,34 @@ namespace
 	// queued, and the player is then stuck in menu mode. Never toggle faster than this.
 	constexpr auto TOGGLE_COOLDOWN = 400ms;
 
+	// True while the game is in any menu of its own (journal, inventory, map,
+	// dialogue, main menu, loading screen, message box, console, ...). The
+	// Character screen must not open on top of those.
+	bool GameMenuIsOpen()
+	{
+		const auto ui = RE::UI::GetSingleton();
+		if (!ui) {
+			return true;
+		}
+		if (ui->GameIsPaused()) {
+			return true;
+		}
+		using Flag = RE::UI_MENU_FLAGS;
+		for (const auto& menu : ui->menuStack) {
+			if (menu && menu->menuFlags.any(Flag::kPausesGame, Flag::kUsesMenuContext, Flag::kModal)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void Toggle(const char* a_reason)
 	{
+		if (!isOpen && GameMenuIsOpen()) {
+			logger::info("Toggle ignored ({}): a game menu is open", a_reason);
+			return;
+		}
+
 		const auto now = std::chrono::steady_clock::now();
 		if (now - lastToggle < TOGGLE_COOLDOWN) {
 			logger::info("Toggle ignored ({}): too soon after the previous one", a_reason);
@@ -99,6 +129,10 @@ namespace
 	public:
 		RE::BSEventNotifyControl ProcessEvent(RE::InputEvent* const* a_events, RE::BSTEventSource<RE::InputEvent*>*) override
 		{
+			// The input manager calls its sinks every frame, events or not, which makes
+			// this the plugin's per-frame hook.
+			CameraStage::Tick();
+
 			if (!a_events) {
 				return RE::BSEventNotifyControl::kContinue;
 			}
