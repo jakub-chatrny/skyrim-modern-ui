@@ -1,42 +1,63 @@
-/* Placeholder theme. Kept to plain, old-WebKit-safe CSS on purpose: the page
-   runs in Ultralight, not Chromium. Add newer features only after checking
-   them in game. */
+/* Design tokens from the Figma file (Skyrim UI, "Character / Iter 3").
+   All sizes in the components are design pixels on a 2560 x 1440 canvas; the
+   canvas is scaled to the game resolution in CharacterScreen.svelte.
+
+   The page runs in Ultralight, not Chromium: keep to plain, older-WebKit-safe
+   CSS and check anything newer in game.
+
+   Performance rule: no continuous animation (CSS animation, transitions that
+   loop, timers that touch the DOM). Prisma UI renders the page on the CPU and
+   the game's frame waits for it, so a page that changes every frame drags the
+   game's frame rate down with it. A static page costs nothing. */
 :root {
-  --text: #e8e4da;
-  --muted: #8d897f;
-  --panel: rgba(10, 10, 12, 0.92);
-  --line: rgba(255, 255, 255, 0.12);
-  --accent: #c8a45a;
-  font-family: system-ui, sans-serif;
-  font-size: 16px;
+  /* The design uses Futura (Windows / MdCn BT / BdCn BT), which cannot be
+     bundled. If those fonts are installed they are used; otherwise the bundled
+     open-licence stand-ins are (Jost, Barlow Condensed). */
+  --font-display: 'Futura Windows', 'Futura', 'Jost', sans-serif;
+  --font-condensed: 'Futura MdCn BT', 'Futura BdCn BT', 'Futura Condensed', 'Barlow Condensed', sans-serif;
+
+  --text: #ffffff;
+  --text-80: rgba(255, 255, 255, 0.8);
+  --text-60: rgba(255, 255, 255, 0.6);
+  --tab-idle: #cccccc;
+  --line-30: rgba(255, 255, 255, 0.3);
+  --line-20: rgba(255, 255, 255, 0.2);
+  --tile-bg: rgba(0, 0, 0, 0.7);
+  --focus: rgba(192, 127, 8, 0.96);
+
+  font-family: var(--font-display);
   color: var(--text);
 }
 
 * {
   box-sizing: border-box;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 html,
 body {
   margin: 0;
+  width: 100%;
   height: 100%;
   /* Transparent: the game shows through wherever the UI does not draw. */
   background: transparent;
   overflow: hidden;
 }
 
+p {
+  margin: 0;
+}
+
 button {
   font: inherit;
   color: inherit;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--line);
-  padding: 0.25rem 0.75rem;
+  background: none;
+  border: 0;
+  padding: 0;
   cursor: pointer;
 }
 
-button:hover:not(:disabled),
-button:focus-visible {
-  border-color: var(--accent);
+button:focus {
   outline: none;
 }

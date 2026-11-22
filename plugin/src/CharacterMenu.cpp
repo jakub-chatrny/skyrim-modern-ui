@@ -4,6 +4,8 @@
 
 #include "CameraStage.h"
 #include "Equipment.h"
+#include "Outfits.h"
+#include "Thumbnails.h"
 #include "PrismaUI_API.h"
 #include "Snapshot.h"
 
@@ -42,6 +44,15 @@ namespace
 		if (!prisma->Focus(view, stage.pauseGame)) {
 			logger::warn("Prisma UI refused focus");
 		}
+		// Ask for pictures of everything that could be equipped, so the popups
+		// have them ready. Only items without one are actually queued, and only
+		// when picture-making is switched on.
+		Thumbnails::SetEnabled(stage.itemPictures);
+		for (std::size_t i = 0; i < Equipment::SLOT_NAMES.size(); ++i) {
+			for (const auto& item : Equipment::ListFor(static_cast<Equipment::Slot>(i)).items) {
+				Thumbnails::Request(item.form);
+			}
+		}
 		PushSnapshot();
 	}
 
@@ -51,6 +62,7 @@ namespace
 		isOpen = false;
 		prisma->Unfocus(view);
 		prisma->Hide(view);
+		Thumbnails::Abort();
 		CameraStage::Leave();
 	}
 
@@ -138,9 +150,25 @@ namespace
 				} else {
 					Equipment::Equip(formID, Equipment::SlotFromName(command.value("slot", "")));
 				}
+			} else if (type == "listItems") {
+				const auto slot = Equipment::SlotFromName(command.value("slot", ""));
+				if (!slot) {
+					logger::warn("listItems: unknown slot in {}", text);
+				} else {
+					const auto payload = nlohmann::json(Snapshot::BuildItemList(*slot).dump()).dump();
+					const auto script = "window.smuiItems && window.smuiItems(" + payload + ")";
+					prisma->Invoke(view, script.c_str());
+				}
+			} else if (type == "switchOutfit") {
+				const auto index = command.value("index", -1);
+				if (index < 0 || !Outfits::Switch(static_cast<std::size_t>(index))) {
+					logger::info("switchOutfit: nothing to do for {}", text);
+				}
+				// Always answer: the UI waits for the snapshot to move its highlight,
+				// and an outfit identical to the current one fires no equip event.
+				PushSnapshot();
 			} else {
-				// TODO(phase 5): switchOutfit.
-				logger::info("Command not implemented yet: {}", text);
+				logger::info("Unknown command: {}", text);
 			}
 		});
 	}
@@ -176,6 +204,12 @@ namespace
 			// The input manager calls its sinks every frame, events or not, which makes
 			// this the plugin's per-frame hook.
 			CameraStage::Tick();
+			if (isOpen) {
+				// When new item pictures are saved, tell the page where they are.
+				Thumbnails::Tick([]() { PushSnapshot(); });
+			} else {
+				Thumbnails::AbortTick();
+			}
 
 			if (!a_events) {
 				return RE::BSEventNotifyControl::kContinue;
@@ -237,6 +271,8 @@ void CharacterMenu::Install()
 	}
 	prisma->RegisterJSListener(view, "smuiCommand", OnCommand);
 	prisma->Hide(view);
+
+	Thumbnails::Install();
 
 	static HotkeySink sink;
 	RE::BSInputDeviceManager::GetSingleton()->AddEventSink(&sink);

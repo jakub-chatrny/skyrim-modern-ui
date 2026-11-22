@@ -6,7 +6,7 @@
     "hideHud": true,
     "pauseGame": false,
     "distance": 190,
-    "offsetX": 0,
+    "offsetX": 29,
     "offsetZ": -25,
     "rotation": 0,
     "pitch": 0.1,
@@ -15,6 +15,7 @@
     "backdropDistance": 150,
     "backdropHeight": 70,
     "backdropScale": 10,
-    "noFog": true
+    "noFog": true,
+    "itemPictures": true
   }
 }

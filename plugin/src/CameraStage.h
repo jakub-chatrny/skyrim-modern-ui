@@ -17,6 +17,7 @@ namespace CameraStage
 	struct Config
 	{
 		bool  enabled = true;
+		bool  itemPictures = true;   // make item pictures in game (Thumbnails.h)
 		bool  hideWorld = true;   // approach 2: cull everything in the scene except the player
 		bool  backdrop = true;            // black plane mesh behind the character
 		float backdropDistance = 150.0f;  // how far behind the character, game units
@@ -27,7 +28,7 @@ namespace CameraStage
 		bool  hideHud = true;     // hide the vanilla HUD (compass, crosshair, bars) while open
 		bool  pauseGame = false;  // paused = frozen pose; unpaused = animated, world keeps running
 		float distance = 190.0f;  // camera distance from the player, game units
-		float offsetX = 0.0f;     // camera sideways shift (moves the character off-centre)
+		float offsetX = 29.0f;    // camera sideways shift; puts the character in the UI stage, left of screen centre
 		float offsetZ = -25.0f;   // camera height shift
 		float rotation = 0.0f;    // radians added to "directly in front"
 		float pitch = 0.1f;       // radians, camera looking slightly down
@@ -41,6 +42,12 @@ namespace CameraStage
 	// is in a state this spike does not handle (mount, furniture, VATS, ...).
 	bool Enter(const Config& a_config);
 	void Leave();
+
+	// True between Enter() and Leave().
+	[[nodiscard]] bool IsActive();
+
+	// True for nodes the stage itself attached to the player (the backdrop).
+	[[nodiscard]] bool IsOwnNode(const RE::NiAVObject* a_object);
 
 	// Call once per frame on the main thread while the game runs. Re-applies the
 	// world hiding to objects that appeared since the last call. Cheap when idle.

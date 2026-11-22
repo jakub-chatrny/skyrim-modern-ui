@@ -149,13 +149,25 @@ bool Equipment::Unequip(Slot a_slot)
 
 bool Equipment::Equip(RE::FormID a_formID, std::optional<Slot> a_slot)
 {
+	auto* player = RE::PlayerCharacter::GetSingleton();
+
+	// Spells are not inventory items; they go straight into a hand.
+	if (auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(a_formID)) {
+		if (!player->HasSpell(spell)) {
+			logger::warn("Equip: player does not know {} ({:#010x})", spell->GetName(), a_formID);
+			return false;
+		}
+		RE::ActorEquipManager::GetSingleton()->EquipSpell(player, spell, HandSlot(a_slot == Slot::kLeftHand));
+		logger::info("Equip: spell {} ({:#010x})", spell->GetName(), a_formID);
+		return true;
+	}
+
 	auto* object = RE::TESForm::LookupByID<RE::TESBoundObject>(a_formID);
 	if (!object) {
 		logger::warn("Equip: form {:#010x} is not an item", a_formID);
 		return false;
 	}
 
-	auto* player = RE::PlayerCharacter::GetSingleton();
 	const auto counts = player->GetInventoryCounts();
 	const auto owned = counts.find(object);
 	if (owned == counts.end() || owned->second <= 0) {
@@ -163,9 +175,10 @@ bool Equipment::Equip(RE::FormID a_formID, std::optional<Slot> a_slot)
 		return false;
 	}
 
+	// Weapons name their hand; armor, shields, torches and ammo find their own place.
 	const RE::BGSEquipSlot* hand = nullptr;
-	if (object->IsWeapon() && a_slot == Slot::kLeftHand) {
-		hand = HandSlot(true);
+	if (object->IsWeapon()) {
+		hand = HandSlot(a_slot == Slot::kLeftHand);
 	}
 
 	// Ammo is equipped as a whole stack.
@@ -173,4 +186,108 @@ bool Equipment::Equip(RE::FormID a_formID, std::optional<Slot> a_slot)
 	RE::ActorEquipManager::GetSingleton()->EquipObject(player, object, nullptr, count, hand);
 	logger::info("Equip: {} ({:#010x})", object->GetName(), a_formID);
 	return true;
+}
+
+Equipment::FormSet Equipment::CurrentForms()
+{
+	const auto loadout = Read();
+	FormSet    forms{};
+	for (std::size_t i = 0; i < forms.size(); ++i) {
+		forms[i] = loadout.slots[i] ? loadout.slots[i].form->GetFormID() : 0;
+	}
+	return forms;
+}
+
+namespace
+{
+	// Can this inventory object go into this slot?
+	bool Fits(RE::TESBoundObject* a_object, Slot a_slot)
+	{
+		if (!a_object->GetPlayable()) {
+			return false;
+		}
+		if (const auto* armor = a_object->As<RE::TESObjectARMO>()) {
+			return SlotForArmor(armor) == a_slot;
+		}
+		if (const auto* weapon = a_object->As<RE::TESObjectWEAP>()) {
+			const bool ranged = weapon->IsBow() || weapon->IsCrossbow();
+			const bool twoHanded = weapon->IsTwoHandedSword() || weapon->IsTwoHandedAxe();
+			switch (a_slot) {
+			case Slot::kRanged:
+				return ranged;
+			case Slot::kRightHand:
+				return !ranged && weapon->GetWeaponType() != RE::WEAPON_TYPE::kHandToHandMelee;
+			case Slot::kLeftHand:
+				return !ranged && !twoHanded && weapon->GetWeaponType() != RE::WEAPON_TYPE::kHandToHandMelee;
+			default:
+				return false;
+			}
+		}
+		if (a_object->IsAmmo()) {
+			return a_slot == Slot::kAmmo;
+		}
+		if (const auto* light = a_object->As<RE::TESObjectLIGH>()) {
+			return a_slot == Slot::kLeftHand && light->CanBeCarried();
+		}
+		return false;
+	}
+}
+
+Equipment::Candidates Equipment::ListFor(Slot a_slot)
+{
+	Candidates result;
+	auto*      player = RE::PlayerCharacter::GetSingleton();
+
+	result.equipped = Read()[a_slot].form;
+	result.inventory = player->GetInventory([&](RE::TESBoundObject& a_object) { return Fits(std::addressof(a_object), a_slot); });
+	for (auto& [object, data] : result.inventory) {
+		if (data.first > 0) {
+			result.items.push_back({ object, data.second.get(), data.first });
+		}
+	}
+
+	const auto name = [](const Item& a_item) {
+		const char* text = a_item.entry ? a_item.entry->GetDisplayName() : a_item.form->GetName();
+		return std::string_view(text ? text : "");
+	};
+	std::ranges::sort(result.items, [&](const Item& a_lhs, const Item& a_rhs) { return name(a_lhs) < name(a_rhs); });
+	return result;
+}
+
+std::size_t Equipment::Apply(const FormSet& a_wanted)
+{
+	const auto current = CurrentForms();
+	auto*      player = RE::PlayerCharacter::GetSingleton();
+	const auto counts = player->GetInventoryCounts();
+
+	const auto owns = [&](RE::FormID a_formID) {
+		if (const auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(a_formID)) {
+			return player->HasSpell(const_cast<RE::SpellItem*>(spell));
+		}
+		auto*      object = RE::TESForm::LookupByID<RE::TESBoundObject>(a_formID);
+		const auto it = object ? counts.find(object) : counts.end();
+		return it != counts.end() && it->second > 0;
+	};
+
+	std::size_t missing = 0;
+
+	// Take things off first, so a hand or body slot is free before its
+	// replacement arrives.
+	for (std::size_t i = 0; i < a_wanted.size(); ++i) {
+		if (current[i] != 0 && a_wanted[i] == 0) {
+			Unequip(static_cast<Slot>(i));
+		}
+	}
+	for (std::size_t i = 0; i < a_wanted.size(); ++i) {
+		if (a_wanted[i] == 0 || a_wanted[i] == current[i]) {
+			continue;
+		}
+		if (!owns(a_wanted[i])) {
+			++missing;
+			logger::info("Apply: {} wants {:#010x}, which the player no longer has", SLOT_NAMES[i], a_wanted[i]);
+			continue;
+		}
+		Equip(a_wanted[i], static_cast<Slot>(i));
+	}
+	return missing;
 }

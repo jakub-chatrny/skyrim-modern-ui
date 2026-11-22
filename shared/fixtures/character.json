@@ -5,18 +5,43 @@
     "level": 27,
     "xpProgress": 0.62,
     "gold": 4381,
-    "carryWeight": { "current": 212, "max": 345 }
+    "carryWeight": {
+      "current": 212,
+      "max": 345
+    },
+    "dragonSouls": 2
   },
   "vitals": {
-    "health": { "current": 240, "max": 280 },
-    "stamina": { "current": 190, "max": 190 },
-    "magicka": { "current": 85, "max": 160 }
+    "health": {
+      "current": 240,
+      "max": 280
+    },
+    "stamina": {
+      "current": 190,
+      "max": 190
+    },
+    "magicka": {
+      "current": 85,
+      "max": 160
+    }
   },
   "survival": {
-    "energy": { "current": 70, "max": 100 },
-    "hunger": { "current": 45, "max": 100 },
-    "thirst": { "current": 60, "max": 100 },
-    "warmth": { "current": 180, "max": 250 }
+    "energy": {
+      "current": 70,
+      "max": 100
+    },
+    "hunger": {
+      "current": 45,
+      "max": 100
+    },
+    "thirst": {
+      "current": 60,
+      "max": 100
+    },
+    "warmth": {
+      "current": 180,
+      "max": 250
+    }
   },
   "resistances": {
     "armor": 312,
@@ -36,12 +61,42 @@
     "magicPower": 0
   },
   "skills": [
-    { "id": "OneHanded", "name": "One-Handed", "level": 61, "progress": 0.4 },
-    { "id": "Archery", "name": "Archery", "level": 48, "progress": 0.1 },
-    { "id": "Block", "name": "Block", "level": 44, "progress": 0.8 },
-    { "id": "HeavyArmor", "name": "Heavy Armor", "level": 52, "progress": 0.55 },
-    { "id": "Smithing", "name": "Smithing", "level": 70, "progress": 0.2 },
-    { "id": "Restoration", "name": "Restoration", "level": 31, "progress": 0.65 }
+    {
+      "id": "OneHanded",
+      "name": "One-Handed",
+      "level": 61,
+      "progress": 0.4
+    },
+    {
+      "id": "Archery",
+      "name": "Archery",
+      "level": 48,
+      "progress": 0.1
+    },
+    {
+      "id": "Block",
+      "name": "Block",
+      "level": 44,
+      "progress": 0.8
+    },
+    {
+      "id": "HeavyArmor",
+      "name": "Heavy Armor",
+      "level": 52,
+      "progress": 0.55
+    },
+    {
+      "id": "Smithing",
+      "name": "Smithing",
+      "level": 70,
+      "progress": 0.2
+    },
+    {
+      "id": "Restoration",
+      "name": "Restoration",
+      "level": 31,
+      "progress": 0.65
+    }
   ],
   "equipment": {
     "head": {
@@ -49,42 +104,96 @@
       "name": "Steel Helmet",
       "type": "armor",
       "icon": "armor-head",
-      "stats": [{ "label": "Armor", "value": "17" }, { "label": "Weight", "value": "5" }]
+      "stats": [
+        {
+          "label": "Armor",
+          "value": "17"
+        },
+        {
+          "label": "Weight",
+          "value": "5"
+        }
+      ]
     },
     "body": {
       "formId": "0x00013950",
       "name": "Steel Armor",
       "type": "armor",
       "icon": "armor-body",
-      "stats": [{ "label": "Armor", "value": "31" }, { "label": "Weight", "value": "35" }]
+      "stats": [
+        {
+          "label": "Armor",
+          "value": "31"
+        },
+        {
+          "label": "Weight",
+          "value": "35"
+        }
+      ]
     },
     "hands": {
       "formId": "0x00013951",
       "name": "Steel Nordic Gauntlets",
       "type": "armor",
       "icon": "armor-hands",
-      "stats": [{ "label": "Armor", "value": "12" }, { "label": "Weight", "value": "4" }]
+      "stats": [
+        {
+          "label": "Armor",
+          "value": "12"
+        },
+        {
+          "label": "Weight",
+          "value": "4"
+        }
+      ]
     },
     "feet": {
       "formId": "0x0001394F",
       "name": "Steel Cuffed Boots",
       "type": "armor",
       "icon": "armor-feet",
-      "stats": [{ "label": "Armor", "value": "12" }, { "label": "Weight", "value": "8" }]
+      "stats": [
+        {
+          "label": "Armor",
+          "value": "12"
+        },
+        {
+          "label": "Weight",
+          "value": "8"
+        }
+      ]
     },
     "leftHand": {
       "formId": "0x00013955",
       "name": "Steel Shield",
       "type": "shield",
       "icon": "shield",
-      "stats": [{ "label": "Armor", "value": "24" }, { "label": "Weight", "value": "12" }]
+      "stats": [
+        {
+          "label": "Armor",
+          "value": "24"
+        },
+        {
+          "label": "Weight",
+          "value": "12"
+        }
+      ]
     },
     "rightHand": {
       "formId": "0x00013989",
       "name": "Steel Sword",
       "type": "weapon",
       "icon": "weapon-sword",
-      "stats": [{ "label": "Damage", "value": "46" }, { "label": "Speed", "value": "1.0" }]
+      "stats": [
+        {
+          "label": "Damage",
+          "value": "46"
+        },
+        {
+          "label": "Speed",
+          "value": "1.0"
+        }
+      ]
     },
     "mask": null,
     "cloak": null,
@@ -93,7 +202,12 @@
       "name": "Amulet of Talos",
       "type": "jewelry",
       "icon": "jewelry-neck",
-      "stats": [{ "label": "Shout cooldown", "value": "-20%" }]
+      "stats": [
+        {
+          "label": "Shout cooldown",
+          "value": "-20%"
+        }
+      ]
     },
     "ring": null,
     "ranged": {
@@ -101,14 +215,43 @@
       "name": "Hunting Bow",
       "type": "weapon",
       "icon": "weapon-bow",
-      "stats": [{ "label": "Damage", "value": "38" }, { "label": "Speed", "value": "0.875" }]
+      "stats": [
+        {
+          "label": "Damage",
+          "value": "38"
+        },
+        {
+          "label": "Speed",
+          "value": "0.875"
+        }
+      ]
     },
     "ammo": {
       "formId": "0x0001397F",
       "name": "Steel Arrow",
       "type": "ammo",
       "icon": "ammo-arrow",
-      "stats": [{ "label": "Damage", "value": "10" }, { "label": "Count", "value": "74" }]
+      "stats": [
+        {
+          "label": "Damage",
+          "value": "10"
+        },
+        {
+          "label": "Count",
+          "value": "74"
+        }
+      ]
     }
-  }
+  },
+  "outfits": {
+    "active": 0,
+    "defined": [
+      true,
+      false,
+      false,
+      false
+    ],
+    "missing": 0
+  },
+  "picturesPending": 0
 }

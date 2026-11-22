@@ -143,14 +143,38 @@ namespace
 			return 0;
 		}
 
+		// The interface 3D scene (where the inventory preview, and so the item
+		// pictures, are drawn) may hang in the same scene graph as the world.
+		const auto* ui3d = RE::UI3DSceneManager::GetSingleton();
+		const auto* interfaceScene = ui3d ? static_cast<const RE::NiAVObject*>(ui3d->shadowSceneNode) : nullptr;
+
 		std::size_t depth = 0;
 		for (RE::NiAVObject* child = player3D; child->parent; child = child->parent, ++depth) {
 			for (auto& sibling : child->parent->GetChildren()) {
-				// Never cull the branch holding the world camera.
-				if (sibling && sibling.get() != child && !IsAncestorOf(sibling.get(), camera)) {
+				// Never cull the branch holding the world camera or the interface scene.
+				if (sibling && sibling.get() != child && !IsAncestorOf(sibling.get(), camera) &&
+					!(interfaceScene && IsAncestorOf(sibling.get(), interfaceScene))) {
 					Cull(sibling.get());
 				}
 			}
+		}
+
+		static bool reported = false;
+		if (!reported) {
+			reported = true;
+			const RE::NiAVObject* worldTop = player3D;
+			while (worldTop->parent) {
+				worldTop = worldTop->parent;
+			}
+			logger::info("HideWorld: interface scene {} the world's scene graph (world top {}, interface top {})",
+				interfaceScene && IsAncestorOf(worldTop, interfaceScene) ? "IS IN" : "is not in", fmt::ptr(worldTop),
+				[&]() {
+					const RE::NiAVObject* top = interfaceScene;
+					while (top && top->parent) {
+						top = top->parent;
+					}
+					return fmt::ptr(top);
+				}());
 		}
 
 		// The sky hangs outside the player's branch on some paths; cull it explicitly.
@@ -451,6 +475,7 @@ CameraStage::Config CameraStage::LoadConfig()
 	};
 
 	config.enabled = flag("enabled", config.enabled);
+	config.itemPictures = flag("itemPictures", config.itemPictures);
 	config.hideWorld = flag("hideWorld", config.hideWorld);
 	config.backdrop = flag("backdrop", config.backdrop);
 	config.backdropDistance = num("backdropDistance", config.backdropDistance);
@@ -594,4 +619,14 @@ void CameraStage::Tick()
 		CullPass(player);
 	}
 	ReapplyFog();
+}
+
+bool CameraStage::IsActive()
+{
+	return saved.active;
+}
+
+bool CameraStage::IsOwnNode(const RE::NiAVObject* a_object)
+{
+	return std::ranges::any_of(backdropPlanes, [&](const auto& a_plane) { return a_plane.get() == a_object; });
 }

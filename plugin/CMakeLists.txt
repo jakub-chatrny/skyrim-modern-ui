@@ -22,6 +22,8 @@ find_package(spdlog CONFIG REQUIRED)
 # CommonLibSSE-NG unconditionally adds it as an include dir.
 find_package(directxtk CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+# stb_image_write, header only: PNG encoding for item pictures.
+find_package(Stb REQUIRED)
 
 set(ENABLE_SKYRIM_SE ON CACHE BOOL "" FORCE)
 set(ENABLE_SKYRIM_AE ON CACHE BOOL "" FORCE)
@@ -52,6 +54,8 @@ add_commonlibsse_plugin(
         src/CharacterMenu.cpp
         src/CameraStage.cpp
         src/Equipment.cpp
+        src/Outfits.cpp
+        src/Thumbnails.cpp
         src/Snapshot.cpp
         "${CMAKE_CURRENT_BINARY_DIR}/src/version.rc"
     USE_ADDRESS_LIBRARY)
@@ -66,6 +70,7 @@ endif()
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${Stb_INCLUDE_DIR})
 # PrismaUI_API.h calls GetModuleHandle with a wide string.
 # NOMINMAX: keep the Windows headers from defining min/max macros over std::min/std::max.
 target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)

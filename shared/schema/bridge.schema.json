@@ -2,24 +2,58 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "skyrim-modern-ui/bridge.schema.json",
   "title": "Skyrim Modern UI bridge",
-  "description": "Single source of truth for messages between the SKSE plugin and the web UI. Plugin -> UI: Snapshot (JSON string passed to window.smuiReceive). UI -> plugin: Command (JSON string passed to window.smuiCommand). Keep ui/src/bridge/types.ts in sync by hand.",
-  "oneOf": [{ "$ref": "#/$defs/Snapshot" }, { "$ref": "#/$defs/Command" }],
+  "description": "Single source of truth for messages between the SKSE plugin and the web UI. Plugin -> UI: Snapshot (JSON string passed to window.smuiReceive) and ItemList (window.smuiItems, the answer to a listItems command). UI -> plugin: Command (JSON string passed to window.smuiCommand). Keep ui/src/bridge/types.ts in sync by hand.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Snapshot"
+    },
+    {
+      "$ref": "#/$defs/ItemList"
+    },
+    {
+      "$ref": "#/$defs/Command"
+    }
+  ],
   "$defs": {
     "Snapshot": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion", "player", "vitals", "resistances", "damage", "skills", "equipment"],
+      "required": [
+        "schemaVersion",
+        "player",
+        "vitals",
+        "resistances",
+        "damage",
+        "skills",
+        "equipment",
+        "outfits",
+        "picturesPending"
+      ],
       "properties": {
-        "schemaVersion": { "const": 1 },
-        "player": { "$ref": "#/$defs/Player" },
+        "schemaVersion": {
+          "const": 1
+        },
+        "player": {
+          "$ref": "#/$defs/Player"
+        },
         "vitals": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["health", "stamina", "magicka"],
+          "required": [
+            "health",
+            "stamina",
+            "magicka"
+          ],
           "properties": {
-            "health": { "$ref": "#/$defs/Gauge" },
-            "stamina": { "$ref": "#/$defs/Gauge" },
-            "magicka": { "$ref": "#/$defs/Gauge" }
+            "health": {
+              "$ref": "#/$defs/Gauge"
+            },
+            "stamina": {
+              "$ref": "#/$defs/Gauge"
+            },
+            "magicka": {
+              "$ref": "#/$defs/Gauge"
+            }
           }
         },
         "survival": {
@@ -27,37 +61,86 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "energy": { "$ref": "#/$defs/Gauge" },
-            "hunger": { "$ref": "#/$defs/Gauge" },
-            "thirst": { "$ref": "#/$defs/Gauge" },
-            "warmth": { "$ref": "#/$defs/Gauge" }
+            "energy": {
+              "$ref": "#/$defs/Gauge"
+            },
+            "hunger": {
+              "$ref": "#/$defs/Gauge"
+            },
+            "thirst": {
+              "$ref": "#/$defs/Gauge"
+            },
+            "warmth": {
+              "$ref": "#/$defs/Gauge"
+            }
           }
         },
         "resistances": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["armor", "magic", "fire", "frost", "shock", "poison", "disease"],
+          "required": [
+            "armor",
+            "magic",
+            "fire",
+            "frost",
+            "shock",
+            "poison",
+            "disease"
+          ],
           "properties": {
-            "armor": { "type": "number" },
-            "magic": { "type": "number" },
-            "fire": { "type": "number" },
-            "frost": { "type": "number" },
-            "shock": { "type": "number" },
-            "poison": { "type": "number" },
-            "disease": { "type": "number" }
+            "armor": {
+              "type": "number"
+            },
+            "magic": {
+              "type": "number"
+            },
+            "fire": {
+              "type": "number"
+            },
+            "frost": {
+              "type": "number"
+            },
+            "shock": {
+              "type": "number"
+            },
+            "poison": {
+              "type": "number"
+            },
+            "disease": {
+              "type": "number"
+            }
           }
         },
         "damage": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["rightHand", "leftHand", "ranged", "meleeSpeed", "rangedSpeed", "magicPower"],
+          "required": [
+            "rightHand",
+            "leftHand",
+            "ranged",
+            "meleeSpeed",
+            "rangedSpeed",
+            "magicPower"
+          ],
           "properties": {
-            "rightHand": { "type": "number" },
-            "leftHand": { "type": "number" },
-            "ranged": { "type": "number" },
-            "meleeSpeed": { "type": "number" },
-            "rangedSpeed": { "type": "number" },
-            "magicPower": { "type": "number" }
+            "rightHand": {
+              "type": "number"
+            },
+            "leftHand": {
+              "type": "number"
+            },
+            "ranged": {
+              "type": "number"
+            },
+            "meleeSpeed": {
+              "type": "number"
+            },
+            "rangedSpeed": {
+              "type": "number"
+            },
+            "magicPower": {
+              "type": "number"
+            }
           }
         },
         "skills": {
@@ -65,12 +148,27 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "name", "level"],
+            "required": [
+              "id",
+              "name",
+              "level"
+            ],
             "properties": {
-              "id": { "type": "string", "description": "Actor value name, e.g. OneHanded" },
-              "name": { "type": "string" },
-              "level": { "type": "integer" },
-              "progress": { "type": "number", "minimum": 0, "maximum": 1 }
+              "id": {
+                "type": "string",
+                "description": "Actor value name, e.g. OneHanded"
+              },
+              "name": {
+                "type": "string"
+              },
+              "level": {
+                "type": "integer"
+              },
+              "progress": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
             }
           }
         },
@@ -78,68 +176,183 @@
           "description": "One entry per slot; null when the slot is empty.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["head", "body", "hands", "feet", "leftHand", "rightHand", "mask", "cloak", "neck", "ring", "ranged", "ammo"],
+          "required": [
+            "head",
+            "body",
+            "hands",
+            "feet",
+            "leftHand",
+            "rightHand",
+            "mask",
+            "cloak",
+            "neck",
+            "ring",
+            "ranged",
+            "ammo"
+          ],
           "properties": {
-            "head": { "$ref": "#/$defs/SlotItem" },
-            "body": { "$ref": "#/$defs/SlotItem" },
-            "hands": { "$ref": "#/$defs/SlotItem" },
-            "feet": { "$ref": "#/$defs/SlotItem" },
-            "leftHand": { "$ref": "#/$defs/SlotItem" },
-            "rightHand": { "$ref": "#/$defs/SlotItem" },
-            "mask": { "$ref": "#/$defs/SlotItem" },
-            "cloak": { "$ref": "#/$defs/SlotItem" },
-            "neck": { "$ref": "#/$defs/SlotItem" },
-            "ring": { "$ref": "#/$defs/SlotItem" },
-            "ranged": { "$ref": "#/$defs/SlotItem" },
-            "ammo": { "$ref": "#/$defs/SlotItem" }
+            "head": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "body": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "hands": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "feet": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "leftHand": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "rightHand": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "mask": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "cloak": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "neck": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "ring": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "ranged": {
+              "$ref": "#/$defs/SlotItem"
+            },
+            "ammo": {
+              "$ref": "#/$defs/SlotItem"
+            }
           }
+        },
+        "outfits": {
+          "$ref": "#/$defs/Outfits"
+        },
+        "picturesPending": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Item pictures still being made. While above 0 the character is replaced on screen by the items being pictured."
         }
       }
     },
     "Player": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "level", "xpProgress", "gold", "carryWeight"],
+      "required": [
+        "name",
+        "level",
+        "xpProgress",
+        "gold",
+        "carryWeight",
+        "dragonSouls"
+      ],
       "properties": {
-        "name": { "type": "string" },
-        "level": { "type": "integer" },
-        "xpProgress": { "type": "number", "minimum": 0, "maximum": 1 },
-        "gold": { "type": "integer" },
-        "carryWeight": { "$ref": "#/$defs/Gauge" }
+        "name": {
+          "type": "string"
+        },
+        "level": {
+          "type": "integer"
+        },
+        "xpProgress": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "gold": {
+          "type": "integer"
+        },
+        "carryWeight": {
+          "$ref": "#/$defs/Gauge"
+        },
+        "dragonSouls": {
+          "type": "integer"
+        }
       }
     },
     "Gauge": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["current", "max"],
+      "required": [
+        "current",
+        "max"
+      ],
       "properties": {
-        "current": { "type": "number" },
-        "max": { "type": "number" }
+        "current": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
       }
     },
     "SlotItem": {
       "oneOf": [
-        { "type": "null" },
+        {
+          "type": "null"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["formId", "name", "type", "icon", "stats"],
+          "required": [
+            "formId",
+            "name",
+            "type",
+            "icon",
+            "stats"
+          ],
           "properties": {
-            "formId": { "type": "string", "pattern": "^0x[0-9A-F]{8}$" },
-            "name": { "type": "string" },
-            "type": { "enum": ["armor", "clothing", "jewelry", "weapon", "shield", "spell", "ammo", "torch"] },
-            "icon": { "type": "string", "description": "Icon key; generic per-type icons first, per-item later." },
+            "formId": {
+              "type": "string",
+              "pattern": "^0x[0-9A-F]{8}$"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "armor",
+                "clothing",
+                "jewelry",
+                "weapon",
+                "shield",
+                "spell",
+                "ammo",
+                "torch"
+              ]
+            },
+            "icon": {
+              "type": "string",
+              "description": "Icon key; generic per-type icons first, per-item later."
+            },
             "stats": {
               "type": "array",
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["label", "value"],
+                "required": [
+                  "label",
+                  "value"
+                ],
                 "properties": {
-                  "label": { "type": "string" },
-                  "value": { "type": "string" }
+                  "label": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
                 }
               }
+            },
+            "thumb": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "URL of the item's cached picture, or null while there is none. Made in game by plugin/src/Thumbnails.cpp."
             }
           }
         }
@@ -150,38 +363,210 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type"],
-          "properties": { "type": { "enum": ["ready", "close"] } }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "formId"],
+          "required": [
+            "type"
+          ],
           "properties": {
-            "type": { "const": "equip" },
-            "formId": { "type": "string" },
-            "slot": { "type": "string" }
+            "type": {
+              "enum": [
+                "ready",
+                "close"
+              ]
+            }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "slot"],
+          "required": [
+            "type",
+            "formId"
+          ],
           "properties": {
-            "type": { "const": "unequip" },
-            "slot": { "type": "string" }
+            "type": {
+              "const": "equip"
+            },
+            "formId": {
+              "type": "string"
+            },
+            "slot": {
+              "type": "string"
+            }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "index"],
+          "required": [
+            "type",
+            "slot"
+          ],
           "properties": {
-            "type": { "const": "switchOutfit" },
-            "index": { "type": "integer", "minimum": 0, "maximum": 3 }
+            "type": {
+              "const": "unequip"
+            },
+            "slot": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "index"
+          ],
+          "properties": {
+            "type": {
+              "const": "switchOutfit"
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "slot"
+          ],
+          "properties": {
+            "type": {
+              "const": "listItems"
+            },
+            "slot": {
+              "type": "string"
+            }
           }
         }
       ]
+    },
+    "Outfits": {
+      "description": "Four equipment sets; the active one is whatever is worn now.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active",
+        "defined",
+        "missing"
+      ],
+      "properties": {
+        "active": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "defined": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "False for an outfit that was never used; switching to it keeps the current gear."
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Items the last switch wanted but the player no longer had."
+        }
+      }
+    },
+    "InventoryItem": {
+      "description": "A SlotItem plus how many the player has and whether it is the one in the slot.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formId",
+        "name",
+        "type",
+        "icon",
+        "stats",
+        "count",
+        "equipped"
+      ],
+      "properties": {
+        "formId": {
+          "type": "string",
+          "pattern": "^0x[0-9A-F]{8}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "armor",
+            "clothing",
+            "jewelry",
+            "weapon",
+            "shield",
+            "spell",
+            "ammo",
+            "torch"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "description": "Icon key; generic per-type icons first, per-item later."
+        },
+        "stats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "value"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "equipped": {
+          "type": "boolean"
+        },
+        "thumb": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "URL of the item's cached picture, or null while there is none. Made in game by plugin/src/Thumbnails.cpp."
+        }
+      }
+    },
+    "ItemList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slot",
+        "items"
+      ],
+      "properties": {
+        "slot": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InventoryItem"
+          }
+        }
+      }
     }
   }
 }

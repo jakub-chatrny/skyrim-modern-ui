@@ -1,6 +1,18 @@
 import { mount } from 'svelte'
+// Stand-ins for the design's Futura faces (see app.css).
+import '@fontsource/jost/400.css'
+import '@fontsource/jost/700.css'
+import '@fontsource/barlow-condensed/500.css'
+import '@fontsource/barlow-condensed/700.css'
 import './app.css'
 import App from './App.svelte'
+
+// Ultralight's WebKit has no HTMLMediaElement. Svelte tests `instanceof
+// HTMLMediaElement` when it attaches load / error listeners (as on <img>), and
+// that throws without the class. An empty stand-in makes the test just false.
+if (typeof window.HTMLMediaElement === 'undefined') {
+  ;(window as unknown as { HTMLMediaElement: unknown }).HTMLMediaElement = class {}
+}
 
 // In game the console is forwarded to SkyrimModernUI.log; make sure script
 // errors reach it with a location.

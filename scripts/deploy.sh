@@ -56,8 +56,9 @@ fi
 echo "==> Deploying to $DEPLOY_DIR"
 view_dir="$DEPLOY_DIR/PrismaUI/views/SkyrimModernUI"
 mkdir -p "$view_dir" "$DEPLOY_DIR/SKSE/Plugins"
-# Replace the old view: bundle file names carry a content hash.
-find "$view_dir" -mindepth 1 -delete
+# Replace the old view: bundle file names carry a content hash. Keep thumbs/,
+# the item pictures the plugin made in game.
+find "$view_dir" -mindepth 1 -not -path "$view_dir/thumbs" -not -path "$view_dir/thumbs/*" -delete
 cp -r "$ROOT/ui/dist/." "$view_dir/"
 if [[ -n "$dll" ]]; then
     cp "$dll" "$DEPLOY_DIR/SKSE/Plugins/SkyrimModernUI.dll"

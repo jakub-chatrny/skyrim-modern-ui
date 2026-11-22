@@ -3,6 +3,8 @@
 #include "Snapshot.h"
 
 #include "Equipment.h"
+#include "Outfits.h"
+#include "Thumbnails.h"
 
 namespace
 {
@@ -114,7 +116,13 @@ namespace
 			stats.push_back(Stat("Weight", Number(entry->GetWeight(), 1)));
 		}
 
+		// A picture is asked for the first time an item is reported, and
+		// reported once it exists.
+		Thumbnails::Request(form);
+		const auto thumb = Thumbnails::UrlFor(form->GetFormID());
+
 		return {
+			{ "thumb", thumb.empty() ? json(nullptr) : json(thumb) },
 			{ "formId", std::format("0x{:08X}", form->GetFormID()) },
 			{ "name", name ? name : "" },
 			{ "type", type },
@@ -222,6 +230,7 @@ json Snapshot::Build()
 				{ "level", player->GetLevel() },
 				{ "xpProgress", progress ? Fraction(progress->xp, progress->levelThreshold) : 0.0f },
 				{ "gold", player->GetGoldAmount() },
+				{ "dragonSouls", static_cast<int>(av->GetActorValue(AV::kDragonSouls)) },
 				{ "carryWeight", Gauge(av->GetActorValue(AV::kInventoryWeight), av->GetActorValue(AV::kCarryWeight)) },
 			} },
 		{ "vitals",
@@ -253,5 +262,25 @@ json Snapshot::Build()
 			} },
 		{ "skills", std::move(skills) },
 		{ "equipment", std::move(equipment) },
+		{ "outfits", Outfits::State() },
+		{ "picturesPending", Thumbnails::Pending() },
+	};
+}
+
+json Snapshot::BuildItemList(Equipment::Slot a_slot)
+{
+	const auto candidates = Equipment::ListFor(a_slot);
+
+	json items = json::array();
+	for (const auto& item : candidates.items) {
+		auto entry = SlotItem(a_slot, item);
+		entry["count"] = item.count;
+		entry["equipped"] = item.form == candidates.equipped;
+		items.push_back(std::move(entry));
+	}
+
+	return {
+		{ "slot", Equipment::SLOT_NAMES[static_cast<std::size_t>(a_slot)] },
+		{ "items", std::move(items) },
 	};
 }

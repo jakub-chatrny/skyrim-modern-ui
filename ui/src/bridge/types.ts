@@ -34,7 +34,30 @@ export interface SlotItem {
   name: string
   type: ItemType
   icon: string
+  /** URL of the item's picture, made in game and cached; absent or null while there is none. */
+  thumb?: string | null
   stats: { label: string; value: string }[]
+}
+
+/** An item in the inventory that could go into a slot. */
+export interface InventoryItem extends SlotItem {
+  count: number
+  equipped: boolean
+}
+
+/** The plugin's answer to a `listItems` command. */
+export interface ItemList {
+  slot: SlotId
+  items: InventoryItem[]
+}
+
+/** Four equipment sets; the active one is whatever is worn now. */
+export interface Outfits {
+  active: number
+  /** False for an outfit that was never used; switching to it keeps the current gear. */
+  defined: boolean[]
+  /** Items the last switch wanted but the player no longer had. */
+  missing: number
 }
 
 export interface Skill {
@@ -51,6 +74,7 @@ export interface Snapshot {
     level: number
     xpProgress: number
     gold: number
+    dragonSouls: number
     carryWeight: Gauge
   }
   vitals: { health: Gauge; stamina: Gauge; magicka: Gauge }
@@ -75,6 +99,9 @@ export interface Snapshot {
   }
   skills: Skill[]
   equipment: Record<SlotId, SlotItem | null>
+  outfits: Outfits
+  /** Item pictures still being made; the character is off screen while this is above 0. */
+  picturesPending: number
 }
 
 export type Command =
@@ -82,6 +109,7 @@ export type Command =
   | { type: 'close' }
   | { type: 'equip'; formId: string; slot?: SlotId }
   | { type: 'unequip'; slot: SlotId }
+  | { type: 'listItems'; slot: SlotId }
   | { type: 'switchOutfit'; index: number }
 
 export interface Bridge {
