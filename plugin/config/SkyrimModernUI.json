@@ -4,7 +4,7 @@
     "hideWorld": true,
     "blackFog": true,
     "hideHud": true,
-    "noCameraCollision": true,
+    "ignoreWalls": false,
     "pauseGame": false,
     "distance": 260,
     "offsetX": -3,

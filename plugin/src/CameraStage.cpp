@@ -484,7 +484,7 @@ CameraStage::Config CameraStage::LoadConfig()
 	config.blackFog = flag("blackFog", config.blackFog);
 	config.noFog = flag("noFog", config.noFog);
 	config.hideHud = flag("hideHud", config.hideHud);
-	config.noCameraCollision = flag("noCameraCollision", config.noCameraCollision);
+	config.ignoreWalls = flag("ignoreWalls", config.ignoreWalls);
 	config.pauseGame = flag("pauseGame", config.pauseGame);
 	config.distance = num("distance", config.distance);
 	config.offsetX = num("offsetX", config.offsetX);
@@ -497,34 +497,121 @@ CameraStage::Config CameraStage::LoadConfig()
 
 namespace
 {
-	// The third-person camera sweeps a sphere from the player out to its
-	// position and stops at the first wall. With the world hidden that wall is
+	// Walls. The third-person camera sweeps from the player out to where it
+	// should be and stops at the first wall. With the world hidden the wall is
 	// invisible, but it still pulls the camera in, so a player standing in front
-	// of one is shown huge. While the screen is open the camera's collision layer
-	// collides with nothing; the whole layer table is put back on close.
-	std::optional<std::array<std::uint64_t, 64>> savedLayerBits;
+	// of one is shown huge. (Clearing the camera's collision layer did not help.)
+	//
+	// So while the screen is open the camera's position is ours: the engine asks
+	// the third-person state for it each frame (GetTranslation), and the hook
+	// answers with a fixed offset from the player, in the camera's own frame.
+	// That offset is learned from the engine's answer whenever nothing is in the
+	// way (a wall only ever makes it shorter); until then it is estimated from
+	// the settings.
 
-	void SetCameraCollision(bool a_enabled)
+	using GetTranslation_t = void (*)(RE::ThirdPersonState*, RE::NiPoint3&);
+	GetTranslation_t originalGetTranslation = nullptr;
+
+	struct WallFix
 	{
-		auto* filter = RE::bhkCollisionFilter::GetSingleton();
-		if (!filter) {
+		bool         enabled = false;
+		int          frames = 0;        // since Enter
+		RE::NiPoint3 offset;            // camera frame, from the anchor
+		bool         learned = false;
+		float        configKey[3]{};    // the settings the learned offset belongs to
+		int          logged = 0;
+	} wallFix;
+
+	RE::NiPoint3 Cross(const RE::NiPoint3& a, const RE::NiPoint3& b)
+	{
+		return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x };
+	}
+
+	// v rotated by the unit quaternion q (inverse: conjugate q first).
+	RE::NiPoint3 Rotate(const RE::NiQuaternion& q, const RE::NiPoint3& v, bool a_inverse = false)
+	{
+		const RE::NiPoint3 u{ a_inverse ? -q.x : q.x, a_inverse ? -q.y : q.y, a_inverse ? -q.z : q.z };
+		const auto         t = Cross(u, v) * 2.0f;
+		return v + t * q.w + Cross(u, t);
+	}
+
+	// The point the offset is measured from: the skeleton's third-person camera
+	// node when there is one, else a point at head height.
+	RE::NiPoint3 Anchor(RE::PlayerCharacter* a_player)
+	{
+		if (auto* root = a_player->Get3D(false)) {
+			if (auto* node = root->GetObjectByName("Camera3rd [Cam3]")) {
+				return node->world.translate;
+			}
+		}
+		return a_player->GetPosition() + RE::NiPoint3(0.0f, 0.0f, 120.0f);
+	}
+
+	void HookedGetTranslation(RE::ThirdPersonState* a_state, RE::NiPoint3& a_out)
+	{
+		originalGetTranslation(a_state, a_out);
+		if (!saved.active || !wallFix.enabled) {
 			return;
 		}
-		auto& rows = filter->layerBitfields;
-		if (!a_enabled && !savedLayerBits) {
-			savedLayerBits.emplace();
-			std::copy(std::begin(rows), std::end(rows), savedLayerBits->begin());
-			constexpr auto layer = static_cast<std::size_t>(RE::COL_LAYER::kCameraSphere);
-			for (auto& row : rows) {
-				row &= ~(std::uint64_t{ 1 } << layer);
-			}
-			rows[layer] = 0;
-			logger::info("Camera collision off");
-		} else if (a_enabled && savedLayerBits) {
-			std::copy(savedLayerBits->begin(), savedLayerBits->end(), std::begin(rows));
-			savedLayerBits.reset();
-			logger::info("Camera collision restored");
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		if (!player) {
+			return;
 		}
+
+		const auto anchor = Anchor(player);
+		const auto& rotation = a_state->rotation;
+		const auto  engine = Rotate(rotation, a_out - anchor, true);  // engine's offset, camera frame
+		++wallFix.frames;
+
+		// Learn once the camera has settled; only a longer offset is ever taken
+		// as "nothing in the way" once one has been learned.
+		constexpr int SETTLE_FRAMES = 10;
+		if (wallFix.frames > SETTLE_FRAMES) {
+			const float engineLength = engine.Length();
+			const float knownLength = wallFix.offset.Length();
+			if (wallFix.learned) {
+				// A wall only shortens the engine's offset; anything as long is free.
+				if (engineLength >= knownLength * 0.98f) {
+					wallFix.offset = engine;
+				}
+			} else if (engineLength >= knownLength * 0.8f) {
+				// Close enough to the estimate that nothing is in the way: take it.
+				logger::info("Wall fix: learned offset {:.1f} {:.1f} {:.1f} (estimate was {:.1f} {:.1f} {:.1f})",
+					engine.x, engine.y, engine.z, wallFix.offset.x, wallFix.offset.y, wallFix.offset.z);
+				wallFix.offset = engine;
+				wallFix.learned = true;
+			}
+		}
+
+		const auto fixed = anchor + Rotate(rotation, wallFix.offset);
+		if (wallFix.logged < 3 && wallFix.frames > SETTLE_FRAMES) {
+			++wallFix.logged;
+			logger::info("Wall fix: engine offset {:.1f} {:.1f} {:.1f} (length {:.1f}), using {:.1f} {:.1f} {:.1f}{}",
+				engine.x, engine.y, engine.z, engine.Length(), wallFix.offset.x, wallFix.offset.y, wallFix.offset.z,
+				wallFix.learned ? "" : " (estimate)");
+		}
+		a_out = fixed;
+	}
+
+	void BeginWallFix(const CameraStage::Config& a_config)
+	{
+		if (!originalGetTranslation) {
+			// Flat (SE / AE) vtable: 0 dtor, 1 Begin, 2 End, 3 Update, 4 GetRotation, 5 GetTranslation.
+			REL::Relocation<std::uintptr_t> vtable{ RE::VTABLE_ThirdPersonState[0] };
+			originalGetTranslation =
+				reinterpret_cast<GetTranslation_t>(vtable.write_vfunc(5, reinterpret_cast<std::uintptr_t>(&HookedGetTranslation)));
+			logger::info("Wall fix: third-person camera position hooked");
+		}
+		const float key[3]{ a_config.distance, a_config.offsetX, a_config.offsetZ };
+		if (!std::equal(std::begin(key), std::end(key), std::begin(wallFix.configKey))) {
+			std::copy(std::begin(key), std::end(key), std::begin(wallFix.configKey));
+			wallFix.learned = false;
+			// First guess: behind the anchor at the set distance, shifted by the offsets.
+			wallFix.offset = RE::NiPoint3(a_config.offsetX, -a_config.distance, a_config.offsetZ);
+		}
+		wallFix.enabled = a_config.ignoreWalls;
+		wallFix.frames = 0;
+		wallFix.logged = 0;
 	}
 }
 
@@ -581,9 +668,7 @@ bool CameraStage::Enter(const Config& a_config)
 	settings.Set("fAutoVanityModeDelay:Camera", 10800.0f);  // no idle orbit while the screen is open
 	settings.Set("fMouseWheelZoomSpeed:Camera", 10000.0f);  // snap instead of gliding into place
 
-	if (a_config.noCameraCollision) {
-		SetCameraCollision(false);
-	}
+	BeginWallFix(a_config);
 	third->pitchZoomOffset = 0.1f;  // distance independent of pitch
 	third->posOffsetExpected = third->posOffsetActual = RE::NiPoint3(a_config.offsetX, 0.0f, a_config.offsetZ);
 
@@ -615,8 +700,8 @@ void CameraStage::Leave()
 	}
 	saved.active = false;
 
-	// Before the camera's last update below, so it comes back out of walls normally.
-	SetCameraCollision(true);
+	// Before the camera's last update below, so the game's own position (walls included) is back.
+	wallFix.enabled = false;
 	DetachBackdrop();
 	ShowWorld();
 	SetHudHidden(false);

@@ -48,6 +48,13 @@ Camera framing and other settings are in `Data/SKSE/Plugins/SkyrimModernUI.json`
 screen opens, so changes need no restart. On Linux the Proton prefix needs a current Visual C++ runtime for
 Prisma UI: `protontricks 489830 vcrun2022`.
 
+### Known issues
+
+- **Standing close to a wall zooms in.** The game's camera stops at the wall behind you even though the wall
+  is hidden, so the character fills the screen. Step away from the wall before opening the screen.
+- **No gamepad support yet.** Keyboard and mouse only.
+- **Only the Character tab exists.** The other tabs in the top bar do nothing.
+
 ## Design
 
 Figma: [Skyrim UI](https://www.figma.com/design/XysgSJjTgysHlN2y6StFND/Skyrim-UI?node-id=2007-3644), frame

@@ -113,3 +113,19 @@ Four equipment sets, kept in the SKSE co-save, so they belong to a save game (`p
 - Switching stores the current gear in the outfit being left and puts on the one being entered.
 - An outfit that was never used starts as a copy of the current gear.
 - Items an outfit wants but the player no longer has are skipped and counted; the UI shows the count.
+
+## Camera and walls (open bug)
+
+Standing with a wall behind the camera, the third-person camera stops at the wall even though the world is
+hidden, so the character is shown far too close. Tried so far (2026-11-23), neither helped:
+
+1. Clearing the camera sphere's collision layer (`COL_LAYER::kCameraSphere`) in `bhkCollisionFilter` while the
+   screen is open. It ran (logged), but the camera still stopped at the wall: the game's check does not go
+   through that layer.
+2. Replacing `ThirdPersonState::GetTranslation` (vtable slot 5) to answer with a learned offset from the
+   player. The hook installed, but the game never called it while the camera moved: the camera position does
+   not come through that function. Still in `CameraStage.cpp` behind `"ignoreWalls"` (off by default).
+
+`ThirdPersonState::UpdateCameraCollision` is the function to replace, but CommonLibSSE-NG has its address
+only for SE (ID 49980), not for AE 1.6+/1.7. Next ideas: find its AE address, or hook `ThirdPersonState::Update`
+(slot 3) and write the camera node's position after it.
