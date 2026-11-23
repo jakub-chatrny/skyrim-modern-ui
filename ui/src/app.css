@@ -1,5 +1,5 @@
-/* Design tokens from the Figma file (Skyrim UI, "Character / Iter 3").
-   All sizes in the components are design pixels on a 2560 x 1440 canvas; the
+/* Design tokens from the Figma file (Skyrim UI, "Character / Iter 4").
+   All sizes in the components are design pixels on a 2507 x 1511 canvas; the
    canvas is scaled to the game resolution in CharacterScreen.svelte.
 
    The page runs in Ultralight, not Chromium: keep to plain, older-WebKit-safe
@@ -10,20 +10,32 @@
    the game's frame waits for it, so a page that changes every frame drags the
    game's frame rate down with it. A static page costs nothing. */
 :root {
-  /* The design uses Futura (Windows / MdCn BT / BdCn BT), which cannot be
-     bundled. If those fonts are installed they are used; otherwise the bundled
-     open-licence stand-ins are (Jost, Barlow Condensed). */
+  /* The design uses Futura (Futura-Bold, Futura Md BT, Futura BdCn BT), which
+     cannot be bundled. If those fonts are installed they are used; otherwise
+     the bundled open-licence stand-ins are (Jost, Barlow Condensed). Alegreya
+     and Inter are open-licence and bundled as they are. */
   --font-display: 'Futura Windows', 'Futura', 'Jost', sans-serif;
-  --font-condensed: 'Futura MdCn BT', 'Futura BdCn BT', 'Futura Condensed', 'Barlow Condensed', sans-serif;
+  --font-medium: 'Futura Md BT', 'Futura', 'Jost', sans-serif;
+  --font-condensed: 'Futura BdCn BT', 'Futura Condensed', 'Barlow Condensed', sans-serif;
+  --font-number: 'Alegreya', serif;
+  --font-label: 'Inter', sans-serif;
 
+  /* Character / Iter 4 */
   --text: #ffffff;
   --text-80: rgba(255, 255, 255, 0.8);
-  --text-60: rgba(255, 255, 255, 0.6);
-  --tab-idle: #cccccc;
+  --ink: #e4f3fa;
+  --muted: #8fa9b8;
+  --label: #6f8a9a;
+  --negative: #f2a65a;
+  --positive: #7fd6c2;
+  --accent: #a8e6ff;
+  --key-text: #bfe3f2;
+  --key-line: #24465c;
+  --tile-bg: #0c1c28;
   --line-30: rgba(255, 255, 255, 0.3);
-  --line-20: rgba(255, 255, 255, 0.2);
-  --tile-bg: rgba(0, 0, 0, 0.7);
-  --focus: rgba(192, 127, 8, 0.96);
+  --mana: #6f8cff;
+  --stamina: #7fd6c2;
+  --health: #e2636e;
 
   font-family: var(--font-display);
   color: var(--text);

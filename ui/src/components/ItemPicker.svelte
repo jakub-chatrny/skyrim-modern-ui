@@ -2,12 +2,13 @@
   // Popup listing what the player owns for one slot. There is no design for it
   // in the Figma file yet; it reuses the tile and panel styles of the screen.
   import type { InventoryItem, SlotId, SlotItem } from '../bridge/types'
-  import { itemIcon, itemStatIcon } from '../lib/icons'
+  import { itemStatIcon } from '../lib/icons'
   import ItemArt from './ItemArt.svelte'
 
   let {
     slot,
     label,
+    icon,
     current,
     items,
     x,
@@ -19,6 +20,8 @@
   }: {
     slot: SlotId
     label: string
+    /** The slot's line icon from the design, shown on the "Nothing" row. */
+    icon: string
     /** What the slot holds now. */
     current: SlotItem | null
     /** null while the plugin's answer is on its way. */
@@ -45,7 +48,7 @@
   <div class="list">
     {#if current}
       <button class="row" onclick={onunequip}>
-        <span class="art empty"><img alt="" src={itemIcon(slot, null)} /></span>
+        <span class="art empty"><img alt="" src={icon} /></span>
         <span class="text">
           <span class="name">Nothing</span>
           <span class="stats">Take off {current.name}</span>
@@ -99,8 +102,8 @@
     width: 460px;
     max-height: 640px;
     padding: 16px;
-    background: rgba(0, 0, 0, 0.92);
-    border: 1px solid var(--line-30);
+    background: #08121a;
+    border: 1px solid var(--key-line);
     border-radius: 16px;
     box-shadow: 0 0 40px 0 rgba(0, 0, 0, 0.8);
   }
@@ -112,7 +115,10 @@
     margin-bottom: 12px;
   }
   .title {
+    font-family: var(--font-display);
+    font-weight: 700;
     font-size: 24px;
+    color: var(--ink);
     line-height: normal;
     text-transform: uppercase;
   }
@@ -122,13 +128,13 @@
     font-weight: 500;
     font-size: 18px;
     line-height: normal;
-    color: var(--text-80);
-    border: 1px solid var(--line-20);
-    border-radius: 8px;
+    color: var(--key-text);
+    border: 1px solid var(--key-line);
+    border-radius: 4px;
   }
   .close:focus {
     color: var(--text);
-    border-color: var(--focus);
+    border-color: var(--accent);
   }
   .list {
     display: flex;
@@ -147,15 +153,15 @@
     padding: 8px;
     text-align: left;
     background: var(--tile-bg);
-    border: 1px solid var(--line-20);
+    border: 1px solid transparent;
     border-radius: 12px;
   }
   .row:focus {
     padding: 7px;
-    border: 2px solid var(--focus);
+    border: 2px solid var(--accent);
   }
   .row.equipped {
-    background: rgba(192, 127, 8, 0.12);
+    background: #10293a;
   }
   /* Clicks land on the row itself. */
   .row > :global(*) {
@@ -175,7 +181,17 @@
     height: 100%;
   }
   .art.empty {
-    opacity: 0.25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tile-bg);
+  }
+  /* The line icon at its own size, as on an empty tile. */
+  .art.empty img {
+    width: auto;
+    height: auto;
+    max-width: 40px;
+    max-height: 40px;
   }
   .text {
     display: flex;
@@ -184,6 +200,9 @@
     min-width: 0;
   }
   .name {
+    font-family: var(--font-medium);
+    font-weight: 500;
+    color: var(--ink);
     font-size: 22px;
     line-height: normal;
     white-space: nowrap;
@@ -197,7 +216,7 @@
     font-weight: 500;
     font-size: 18px;
     line-height: normal;
-    color: var(--text-80);
+    color: var(--muted);
     white-space: nowrap;
   }
   .stat {
@@ -223,17 +242,17 @@
     line-height: normal;
   }
   .tag {
-    color: var(--focus);
+    color: var(--accent);
     text-transform: uppercase;
   }
   .count {
-    color: var(--text-80);
+    color: var(--muted);
   }
   .note {
     padding: 12px 8px;
     font-family: var(--font-condensed);
     font-weight: 500;
     font-size: 20px;
-    color: var(--text-60);
+    color: var(--muted);
   }
 </style>

@@ -1,11 +1,13 @@
 <script lang="ts">
-  // Figma node 18:12186 "Menu": a 3 x 2 grid. Row 1: name, tabs, counters.
-  // Row 2: level + XP bar, outfit tabs.
+  // Figma node 2007:3648 "Menu" (Character / Iter 4): a 3 x 2 grid. Row 1:
+  // name, Q / tabs / E, counters. Row 2: level + XP bar, A / outfits / D.
+  // The hotkeys themselves are handled in CharacterScreen.svelte.
   import coinA from '../assets/design/icon-coin-a.svg'
   import coinB from '../assets/design/icon-coin-b.svg'
   import dragonHead from '../assets/design/icon-dragon-head.svg'
   import weight from '../assets/design/icon-weight.svg'
   import type { Snapshot } from '../bridge/types'
+  import Hotkey from './Hotkey.svelte'
 
   let {
     player,
@@ -24,13 +26,13 @@
   <p class="name">{player.name}</p>
 
   <nav class="tabs">
-    <span class="key">L1</span>
+    <Hotkey key="Q" />
     <div class="items">
       {#each tabs as tab}
         <span class="tab" class:active={tab === 'Character'}>{tab}</span>
       {/each}
     </div>
-    <span class="key">R1</span>
+    <Hotkey key="E" />
   </nav>
 
   <div class="counters">
@@ -62,11 +64,15 @@
   </div>
 
   <div class="submenu">
-    {#each outfits.defined as _, index}
-      <button class="outfit" class:active={index === outfits.active} onclick={() => onoutfit(index)}>
-        Outfit {index + 1}
-      </button>
-    {/each}
+    <Hotkey key="A" />
+    <div class="outfits">
+      {#each outfits.defined as _, index}
+        <button class="outfit" class:active={index === outfits.active} onclick={() => onoutfit(index)}>
+          Outfit {index + 1}
+        </button>
+      {/each}
+    </div>
+    <Hotkey key="D" />
     {#if outfits.missing > 0}
       <p class="missing">
         {outfits.missing === 1 ? '1 item is' : `${outfits.missing} items are`} no longer in the inventory
@@ -90,6 +96,7 @@
     grid-column: 1;
     grid-row: 1;
     align-self: start;
+    font-family: var(--font-display);
     font-weight: 700;
     font-size: 40px;
     line-height: normal;
@@ -103,7 +110,7 @@
     display: flex;
     align-items: center;
   }
-  .tabs > * + * {
+  .tabs > :global(* + *) {
     margin-left: 30px;
   }
   .items {
@@ -118,11 +125,13 @@
     align-items: center;
     justify-content: center;
     height: 54px;
+    font-family: var(--font-medium);
+    font-weight: 500;
     font-size: 36px;
     line-height: normal;
     text-transform: uppercase;
     white-space: nowrap;
-    color: var(--tab-idle);
+    color: var(--muted);
   }
   .tab.active {
     width: 221px;
@@ -131,20 +140,6 @@
     color: var(--text);
     border-bottom: 3px solid var(--text);
   }
-  .key {
-    padding: 2px 12px;
-    font-family: var(--font-condensed);
-    font-weight: 500;
-    font-size: 14px;
-    line-height: normal;
-    text-transform: uppercase;
-    color: var(--text-80);
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid #000;
-    border-radius: 2px 2px 14px 14px;
-    box-shadow: 0 0 6px 0 rgba(255, 255, 255, 0.55);
-  }
-
   .counters {
     grid-column: 3;
     grid-row: 1;
@@ -214,7 +209,12 @@
   .level-number {
     font-weight: 700;
   }
+  .level-number {
+    font-family: var(--font-display);
+  }
   .level-label {
+    font-family: var(--font-medium);
+    font-weight: 500;
     margin-left: 7px;
     color: var(--text-80);
   }
@@ -242,13 +242,20 @@
     position: relative;
     grid-column: 2;
     grid-row: 2;
-    align-self: center;
+    align-self: end;
     justify-self: center;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 10px;
   }
-  .submenu > .outfit + .outfit {
+  .outfits {
+    display: flex;
+    align-items: center;
+    margin: 0 10px;
+    padding: 0 24px;
+  }
+  .outfit + .outfit {
     margin-left: 47px;
   }
   .outfit {
@@ -256,15 +263,19 @@
     align-items: center;
     justify-content: center;
     height: 34px;
+    font-family: var(--font-medium);
+    font-weight: 500;
     font-size: 24px;
     line-height: normal;
     text-transform: uppercase;
     white-space: nowrap;
+    color: var(--muted);
     border-bottom: 1px solid transparent;
   }
   .outfit.active {
     height: auto;
     font-size: 28px;
+    color: var(--text);
     border-bottom-color: var(--text);
   }
   /* Not in the design: shown when an outfit wanted something that is gone. */
@@ -280,9 +291,9 @@
     font-size: 18px;
     line-height: normal;
     white-space: nowrap;
-    color: var(--focus);
+    color: var(--negative);
   }
   .outfit:focus {
-    border-bottom-color: var(--focus);
+    border-bottom-color: var(--negative);
   }
 </style>

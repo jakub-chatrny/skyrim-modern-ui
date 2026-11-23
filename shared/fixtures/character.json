@@ -27,20 +27,20 @@
   },
   "survival": {
     "energy": {
-      "current": 70,
+      "current": 80,
       "max": 100
     },
     "hunger": {
-      "current": 45,
-      "max": 100
-    },
-    "thirst": {
       "current": 60,
       "max": 100
     },
+    "thirst": {
+      "current": 80,
+      "max": 100
+    },
     "warmth": {
-      "current": 180,
-      "max": 250
+      "current": 40,
+      "max": 100
     }
   },
   "resistances": {
@@ -68,6 +68,12 @@
       "progress": 0.4
     },
     {
+      "id": "TwoHanded",
+      "name": "Two-Handed",
+      "level": 38,
+      "progress": 0.3
+    },
+    {
       "id": "Archery",
       "name": "Archery",
       "level": 48,
@@ -80,15 +86,75 @@
       "progress": 0.8
     },
     {
+      "id": "Smithing",
+      "name": "Smithing",
+      "level": 70,
+      "progress": 0.2
+    },
+    {
       "id": "HeavyArmor",
       "name": "Heavy Armor",
       "level": 52,
       "progress": 0.55
     },
     {
-      "id": "Smithing",
-      "name": "Smithing",
-      "level": 70,
+      "id": "LightArmor",
+      "name": "Light Armor",
+      "level": 22,
+      "progress": 0.1
+    },
+    {
+      "id": "Pickpocket",
+      "name": "Pickpocket",
+      "level": 15,
+      "progress": 0
+    },
+    {
+      "id": "Lockpicking",
+      "name": "Lockpicking",
+      "level": 27,
+      "progress": 0.5
+    },
+    {
+      "id": "Sneak",
+      "name": "Sneak",
+      "level": 33,
+      "progress": 0.2
+    },
+    {
+      "id": "Alchemy",
+      "name": "Alchemy",
+      "level": 19,
+      "progress": 0.7
+    },
+    {
+      "id": "Speech",
+      "name": "Speech",
+      "level": 25,
+      "progress": 0.3
+    },
+    {
+      "id": "Alteration",
+      "name": "Alteration",
+      "level": 17,
+      "progress": 0.1
+    },
+    {
+      "id": "Conjuration",
+      "name": "Conjuration",
+      "level": 15,
+      "progress": 0
+    },
+    {
+      "id": "Destruction",
+      "name": "Destruction",
+      "level": 21,
+      "progress": 0.4
+    },
+    {
+      "id": "Illusion",
+      "name": "Illusion",
+      "level": 15,
       "progress": 0.2
     },
     {
@@ -96,6 +162,12 @@
       "name": "Restoration",
       "level": 31,
       "progress": 0.65
+    },
+    {
+      "id": "Enchanting",
+      "name": "Enchanting",
+      "level": 18,
+      "progress": 0.9
     }
   ],
   "equipment": {
@@ -253,5 +325,28 @@
     ],
     "missing": 0
   },
-  "picturesPending": 0
+  "picturesPending": 0,
+  "effects": [
+    {
+      "name": "Chilled",
+      "description": "−15% stamina regeneration",
+      "remaining": -1,
+      "positive": false,
+      "kind": "cold"
+    },
+    {
+      "name": "Venison Stew",
+      "description": "+5% health regeneration",
+      "remaining": 240,
+      "positive": true,
+      "kind": "food"
+    },
+    {
+      "name": "Skaði’s Favour",
+      "description": "+15% damage to beasts",
+      "remaining": 64800,
+      "positive": true,
+      "kind": "other"
+    }
+  ]
 }

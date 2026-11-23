@@ -236,6 +236,22 @@
           "type": "integer",
           "minimum": 0,
           "description": "Item pictures still being made. While above 0 the character is replaced on screen by the items being pictured."
+        },
+        "effects": {
+          "type": "array",
+          "description": "Active effects, one per spell, potion or food; hidden and inactive effects left out.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "description", "remaining", "positive", "kind"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "remaining": { "type": "number", "description": "Seconds left; -1 when the effect does not run out." },
+              "positive": { "type": "boolean" },
+              "kind": { "enum": ["cold", "food", "other"] }
+            }
+          }
         }
       }
     },

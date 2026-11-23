@@ -67,6 +67,15 @@ export interface Skill {
   progress?: number
 }
 
+export interface ActiveEffect {
+  name: string
+  description: string
+  /** Seconds left; -1 when the effect does not run out. */
+  remaining: number
+  positive: boolean
+  kind: 'cold' | 'food' | 'other'
+}
+
 export interface Snapshot {
   schemaVersion: 1
   player: {
@@ -102,6 +111,8 @@ export interface Snapshot {
   outfits: Outfits
   /** Item pictures still being made; the character is off screen while this is above 0. */
   picturesPending: number
+  /** Older plugins do not send it. */
+  effects?: ActiveEffect[]
 }
 
 export type Command =

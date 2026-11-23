@@ -221,6 +221,7 @@ namespace
 					continue;
 				}
 				if (button->GetIDCode() != TOGGLE_KEY) {
+					ForwardKey(*button);
 					continue;
 				}
 				// Act once per physical press. IsDown() (held duration == 0) can stay true
@@ -236,7 +237,48 @@ namespace
 		}
 
 	private:
+		// Prisma UI does not pass the keyboard on to the page, so the screen's
+		// keys are read here and handed over as window.smuiKey(name), once per
+		// press. Names match what the page's keydown handler uses.
+		void ForwardKey(const RE::ButtonEvent& a_button)
+		{
+			const auto code = a_button.GetIDCode();
+			if (code >= _held.size()) {
+				return;
+			}
+			const bool pressed = a_button.IsPressed();
+			const bool fresh = pressed && !_held[code];
+			_held[code] = pressed;
+			if (!fresh || !isOpen || !prisma) {
+				return;
+			}
+
+			const char* name = nullptr;
+			switch (code) {  // DirectInput scan codes
+			case 0x02: name = "1"; break;
+			case 0x03: name = "2"; break;
+			case 0x04: name = "3"; break;
+			case 0x05: name = "4"; break;
+			case 0x10: name = "q"; break;
+			case 0x11: name = "w"; break;
+			case 0x12: name = "e"; break;
+			case 0x1E: name = "a"; break;
+			case 0x1F: name = "s"; break;
+			case 0x20: name = "d"; break;
+			case 0x1C: name = "enter"; break;
+			case 0x39: name = " "; break;
+			case 0xC8: name = "arrowup"; break;
+			case 0xD0: name = "arrowdown"; break;
+			case 0xCB: name = "arrowleft"; break;
+			case 0xCD: name = "arrowright"; break;
+			default: return;
+			}
+			const auto script = std::format("window.smuiKey && window.smuiKey('{}')", name);
+			prisma->Invoke(view, script.c_str());
+		}
+
 		bool _keyHeld = false;
+		std::array<bool, 256> _held{};
 	};
 }
 

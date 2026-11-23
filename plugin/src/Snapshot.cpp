@@ -164,6 +164,156 @@ namespace
 		return a_of > 0.0f ? std::clamp(a_value / a_of, 0.0f, 1.0f) : 0.0f;
 	}
 
+	// "Restore <mag> points of Health for <dur> seconds." -> numbers filled in,
+	// any other <tag> dropped.
+	std::string FillDescription(std::string_view a_template, float a_magnitude, float a_duration)
+	{
+		std::string out;
+		out.reserve(a_template.size());
+		for (std::size_t i = 0; i < a_template.size();) {
+			if (a_template[i] != '<') {
+				out += a_template[i++];
+				continue;
+			}
+			const auto end = a_template.find('>', i);
+			if (end == std::string_view::npos) {
+				out += a_template.substr(i);
+				break;
+			}
+			const auto tag = a_template.substr(i + 1, end - i - 1);
+			if (tag == "mag") {
+				out += Number(a_magnitude);
+			} else if (tag == "dur") {
+				out += Number(a_duration);
+			}
+			i = end + 1;
+		}
+		return out;
+	}
+
+	// Active effects as the Magic menu's "Active Effects" list shows them: one
+	// row per spell, potion or food, hidden and inactive effects left out.
+	json ActiveEffects(RE::PlayerCharacter* a_player)
+	{
+		struct Row
+		{
+			std::string name;
+			std::string description;
+			float       remaining = -1.0f;  // seconds; -1 = no end (abilities)
+			bool        positive = true;
+			const char* kind = "other";
+		};
+		std::vector<Row>                                rows;
+		std::unordered_map<const RE::MagicItem*, std::size_t> bySpell;
+
+		auto* list = a_player->AsMagicTarget()->GetActiveEffectList();
+		if (!list) {
+			return json::array();
+		}
+		using EffectFlag = RE::EffectSetting::EffectSettingData::Flag;
+		using ActiveFlag = RE::ActiveEffect::Flag;
+		for (auto* effect : *list) {
+			if (!effect || !effect->effect || !effect->effect->baseEffect) {
+				continue;
+			}
+			const auto* base = effect->effect->baseEffect;
+			if (base->data.flags.any(EffectFlag::kHideInUI) ||
+				effect->flags.any(ActiveFlag::kInactive, ActiveFlag::kDispelled)) {
+				continue;
+			}
+			const auto* spell = effect->spell;
+			const float remaining = effect->duration > 0.0f ? std::max(0.0f, effect->duration - effect->elapsedSeconds) : -1.0f;
+
+			auto found = bySpell.find(spell);
+			if (found != bySpell.end() && spell) {
+				// Same spell, another effect: keep the first description, the longest time.
+				auto& row = rows[found->second];
+				if (remaining > row.remaining) {
+					row.remaining = remaining;
+				}
+				row.positive = row.positive && !base->IsDetrimental();
+				continue;
+			}
+
+			Row row;
+			const char* spellName = spell ? spell->GetFullName() : nullptr;
+			row.name = spellName && *spellName ? spellName : base->GetFullName();
+			if (row.name.empty()) {
+				continue;
+			}
+			row.description = FillDescription(base->magicItemDescription.c_str(), effect->magnitude, effect->duration);
+			row.remaining = remaining;
+			row.positive = !base->IsDetrimental();
+			if (spell && spell->IsFood()) {
+				row.kind = "food";
+			} else if (base->data.resistVariable == AV::kResistFrost || base->data.primaryAV == AV::kResistFrost) {
+				row.kind = "cold";
+			}
+			if (spell) {
+				bySpell.emplace(spell, rows.size());
+			}
+			rows.push_back(std::move(row));
+		}
+
+		json out = json::array();
+		for (auto& row : rows) {
+			out.push_back({
+				{ "name", std::move(row.name) },
+				{ "description", std::move(row.description) },
+				{ "remaining", row.remaining },
+				{ "positive", row.positive },
+				{ "kind", row.kind },
+			});
+		}
+		return out;
+	}
+
+	// Survival Mode (Creation Club, part of Anniversary Edition) keeps its needs
+	// in global variables; a need value counts up from 0 (fine) to its maximum.
+	// Global editor IDs are kept at run time, so they can be found by name.
+	// Every Survival_ global is logged once, so other names can be added from the log.
+	RE::TESGlobal* FindGlobal(std::string_view a_editorID)
+	{
+		static std::unordered_map<std::string, RE::TESGlobal*> globals = [] {
+			std::unordered_map<std::string, RE::TESGlobal*> map;
+			if (auto* data = RE::TESDataHandler::GetSingleton()) {
+				for (auto* global : data->GetFormArray<RE::TESGlobal>()) {
+					const char* id = global ? global->GetFormEditorID() : nullptr;
+					if (id && *id) {
+						map.emplace(id, global);
+						if (std::string_view(id).starts_with("Survival_")) {
+							SKSE::log::info("survival global {} = {}", id, global->value);
+						}
+					}
+				}
+			}
+			return map;
+		}();
+		const auto found = globals.find(std::string(a_editorID));
+		return found != globals.end() ? found->second : nullptr;
+	}
+
+	json Survival()
+	{
+		const auto* enabled = FindGlobal("Survival_ModeEnabled");
+		if (!enabled || enabled->value < 1.0f) {
+			return nullptr;
+		}
+		json out = json::object();
+		// need -> how well the player is doing, as a gauge that is full when fine.
+		const auto need = [&](const char* a_key, std::string_view a_value, std::string_view a_max) {
+			const auto* value = FindGlobal(a_value);
+			const auto* max = FindGlobal(a_max);
+			if (value && max && max->value > 0.0f) {
+				out[a_key] = Gauge(std::clamp(max->value - value->value, 0.0f, max->value), max->value);
+			}
+		};
+		need("energy", "Survival_ExhaustionNeedValue", "Survival_ExhaustionNeedMaxValue");
+		need("hunger", "Survival_HungerNeedValue", "Survival_HungerNeedMaxValue");
+		need("warmth", "Survival_ColdNeedValue", "Survival_ColdNeedMaxValue");
+		return out.empty() ? json(nullptr) : out;
+	}
+
 	// The weapon speed multiplier actor values read 0 when nothing modifies them.
 	float SpeedMult(RE::ActorValueOwner* a_owner, AV a_value)
 	{
@@ -222,7 +372,7 @@ json Snapshot::Build()
 
 	const auto resist = [&](AV a_value) { return av->GetActorValue(a_value); };
 
-	return {
+	json snapshot = {
 		{ "schemaVersion", 1 },
 		{ "player",
 			{
@@ -264,7 +414,12 @@ json Snapshot::Build()
 		{ "equipment", std::move(equipment) },
 		{ "outfits", Outfits::State() },
 		{ "picturesPending", Thumbnails::Pending() },
+		{ "effects", ActiveEffects(player) },
 	};
+	if (auto survival = Survival(); !survival.is_null()) {
+		snapshot["survival"] = std::move(survival);
+	}
+	return snapshot;
 }
 
 json Snapshot::BuildItemList(Equipment::Slot a_slot)

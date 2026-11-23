@@ -11,3 +11,6 @@ ui/dist/
 
 .DS_Store
 .vscode/
+
+# packaged mod zips (scripts/package.sh)
+release/

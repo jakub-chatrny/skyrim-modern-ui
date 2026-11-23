@@ -27,9 +27,9 @@ namespace CameraStage
 		bool  noFog = true;               // outdoors: weather fog switched off while open
 		bool  hideHud = true;     // hide the vanilla HUD (compass, crosshair, bars) while open
 		bool  pauseGame = false;  // paused = frozen pose; unpaused = animated, world keeps running
-		float distance = 190.0f;  // camera distance from the player, game units
-		float offsetX = 29.0f;    // camera sideways shift; puts the character in the UI stage, left of screen centre
-		float offsetZ = -25.0f;   // camera height shift
+		float distance = 260.0f;  // camera distance from the player, game units
+		float offsetX = -3.0f;    // camera sideways shift; centres the character in the arch
+		float offsetZ = -45.0f;   // camera height shift; lower camera = character higher on screen
 		float rotation = 0.0f;    // radians added to "directly in front"
 		float pitch = 0.1f;       // radians, camera looking slightly down
 		float fov = 0.0f;         // 0 = leave the game's FOV alone

@@ -63,8 +63,6 @@ Implemented on top of approach 1 in the same file (`hideWorld`, `hideHud`).
 
 Status: **works in game** (user screenshots 2026-11-16).
 
-![Approach 1](img/phase2-approach1.jpg)
-![Approach 2, first version](img/phase2-approach2-fogcolour.jpg)
 
 Findings from the first in-game look:
 
@@ -89,7 +87,6 @@ Third round (user screenshot, 2026-11-16): culling the children of each actor's 
 are gone. First crash seen: alt-tabbing away while the screen was open. No trace in any log; cause unknown
 (candidates: Prisma UI's focus handling, our per-frame pass, Proton). CrashLoggerSSE is not installed.
 
-![Approach 2, actors hidden](img/phase2-approach2-actors-hidden.jpg)
 
 Requirement clarified by the user: the background **must be black**; the "fog" in the design is a white fog
 animation drawn by the UI over that black, not the game's fog.
@@ -110,8 +107,6 @@ save. Tunable in the JSON: `backdrop`, `backdropDistance`, `backdropHeight`, `ba
 
 Result of rounds four and five (user screenshots, 2026-11-16):
 
-![Backdrop indoors](img/phase2-backdrop-indoors-black.jpg)
-![Backdrop outdoors](img/phase2-backdrop-outdoors-brown.jpg)
 
 - **Indoors: pitch black.** The backdrop works.
 - **Outdoors:** black for about a frame, then dark brown, with the character's shadow visible on the backdrop
@@ -122,7 +117,6 @@ Result of rounds four and five (user screenshots, 2026-11-16):
 
 Sixth round — **works** (user, 2026-11-16: "works perfectly", black outdoors too):
 
-![Final result outdoors](img/phase2-final-outdoors.jpg)
 
 
 - `noFog`: outdoors the weather's fog is switched off while the screen is open (maximum opacity 0), instead of

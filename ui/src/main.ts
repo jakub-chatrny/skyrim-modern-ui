@@ -1,9 +1,13 @@
 import { mount } from 'svelte'
 // Stand-ins for the design's Futura faces (see app.css).
 import '@fontsource/jost/400.css'
+import '@fontsource/jost/500.css'
+import '@fontsource/jost/500-italic.css'
 import '@fontsource/jost/700.css'
 import '@fontsource/barlow-condensed/500.css'
 import '@fontsource/barlow-condensed/700.css'
+import '@fontsource/alegreya/400.css'
+import '@fontsource/inter/400.css'
 import './app.css'
 import App from './App.svelte'
 

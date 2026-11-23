@@ -2,8 +2,11 @@
 // direction to the nearest control that way, wherever the layout put it.
 //
 //   move      arrow keys, W A S D, D-pad
-//   activate  Enter, Space (native on a focused button), E, gamepad accept (A / Cross)
-//   tabs      Q / E are NOT used; LB / RB are reported to the caller
+//   activate  Enter, Space, gamepad accept (A / Cross)
+//   hotkeys   keys the caller claims (the Character screen: Q / E main tabs,
+//             A / D and 1-4 outfits) win over moving; LB / RB are reported to the caller
+//
+// Keys come from the browser's keydown, or in game from the plugin (window.smuiKey).
 //
 // Opening and closing the screen is the plugin's hotkey only; nothing here
 // closes it, and Esc and the gamepad cancel button are left alone.
@@ -34,6 +37,39 @@ export interface NavigationOptions {
   onShoulder?: (step: -1 | 1) => void
   /** CSS selectors for the control that gets focus first, tried in order; default is the first control. */
   initial?: string[]
+  /** Keys (lower case) the caller handles itself, taking them from movement. */
+  hotkeys?: Record<string, () => void>
+}
+
+declare global {
+  interface Window {
+    /** Called by the plugin with a key name as `keyName` gives it ('a', 'arrowup', 'enter', '1'). */
+    smuiKey?: (key: string) => void
+  }
+}
+
+// Set by the first real keydown; from then on the plugin's copies are ignored.
+let domKeys = false
+
+const KEY_CODES: Record<number, string> = {
+  13: 'enter',
+  32: ' ',
+  37: 'arrowleft',
+  38: 'arrowup',
+  39: 'arrowright',
+  40: 'arrowdown',
+}
+
+/**
+ * The key as lower-case `KeyboardEvent.key`. Ultralight can hand letter keys
+ * over with `key` empty or as an identifier ("U+0041"), so the key code wins
+ * for letters, arrows, Enter and Space.
+ */
+function keyName(event: KeyboardEvent): string {
+  const code = event.keyCode
+  if (code >= 65 && code <= 90) return String.fromCharCode(code + 32)
+  if (code >= 48 && code <= 57) return String.fromCharCode(code)
+  return KEY_CODES[code] ?? (event.key ?? '').toLowerCase()
 }
 
 function focusables(root: HTMLElement): HTMLElement[] {
@@ -90,16 +126,32 @@ export function attachNavigation(root: HTMLElement, options: NavigationOptions =
 
   const activate = () => current()?.click()
 
-  const onKeydown = (event: KeyboardEvent) => {
-    const key = event.key.toLowerCase()
+  // One handler for both key sources; true when the key was used.
+  const handleKey = (key: string): boolean => {
+    const hotkey = options.hotkeys?.[key]
     const direction = KEY_DIRECTIONS[key]
-    if (direction) {
-      event.preventDefault()
+    if (hotkey) {
+      hotkey()
+    } else if (direction) {
       move(direction)
-    } else if (key === 'e') {
-      event.preventDefault()
+    } else if (key === 'enter' || key === ' ') {
       activate()
+    } else {
+      return false
     }
+    return true
+  }
+
+  const onKeydown = (event: KeyboardEvent) => {
+    domKeys = true
+    if (handleKey(keyName(event))) event.preventDefault()
+  }
+
+  // In game Prisma UI does not pass the keyboard to the page; the plugin reads
+  // the keys itself and calls this. Ignored once real key events have been seen,
+  // so a key never counts twice.
+  const onPluginKey = (key: string) => {
+    if (!domKeys) handleKey(key)
   }
 
   const onMouseover = (event: MouseEvent) => {
@@ -127,6 +179,7 @@ export function attachNavigation(root: HTMLElement, options: NavigationOptions =
   const pad: PrismaUiControls | undefined = window.prismaUi?.controls
 
   window.addEventListener('keydown', onKeydown)
+  window.smuiKey = onPluginKey
   root.addEventListener('mouseover', onMouseover)
   pad?.addEventListener('gamepadbuttondown', onPadDown)
 
@@ -139,6 +192,7 @@ export function attachNavigation(root: HTMLElement, options: NavigationOptions =
 
   return () => {
     window.removeEventListener('keydown', onKeydown)
+    if (window.smuiKey === onPluginKey) delete window.smuiKey
     root.removeEventListener('mouseover', onMouseover)
     pad?.removeEventListener('gamepadbuttondown', onPadDown)
   }
