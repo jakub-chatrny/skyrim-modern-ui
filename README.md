@@ -8,7 +8,7 @@ fed by a small SKSE plugin.
 **Status: working prototype.** The Character screen works in game; the other tabs in the top bar (Map, Quests,
 Magic, Inventory, Skills) are placeholders.
 
-<!-- Screenshot: docs/img/character-screen.jpg (in game, 2560 x 1440) -->
+![The Character screen in game](docs/img/character-screen.jpg)
 
 ## What works
 

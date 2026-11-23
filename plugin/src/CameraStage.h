@@ -26,6 +26,7 @@ namespace CameraStage
 		bool  blackFog = true;            // fog colours set to black while open
 		bool  noFog = true;               // outdoors: weather fog switched off while open
 		bool  hideHud = true;     // hide the vanilla HUD (compass, crosshair, bars) while open
+		bool  noCameraCollision = true;  // the camera ignores walls while open (else it is pulled in close to the player)
 		bool  pauseGame = false;  // paused = frozen pose; unpaused = animated, world keeps running
 		float distance = 260.0f;  // camera distance from the player, game units
 		float offsetX = -3.0f;    // camera sideways shift; centres the character in the arch

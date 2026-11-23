@@ -484,6 +484,7 @@ CameraStage::Config CameraStage::LoadConfig()
 	config.blackFog = flag("blackFog", config.blackFog);
 	config.noFog = flag("noFog", config.noFog);
 	config.hideHud = flag("hideHud", config.hideHud);
+	config.noCameraCollision = flag("noCameraCollision", config.noCameraCollision);
 	config.pauseGame = flag("pauseGame", config.pauseGame);
 	config.distance = num("distance", config.distance);
 	config.offsetX = num("offsetX", config.offsetX);
@@ -492,6 +493,39 @@ CameraStage::Config CameraStage::LoadConfig()
 	config.pitch = num("pitch", config.pitch);
 	config.fov = num("fov", config.fov);
 	return config;
+}
+
+namespace
+{
+	// The third-person camera sweeps a sphere from the player out to its
+	// position and stops at the first wall. With the world hidden that wall is
+	// invisible, but it still pulls the camera in, so a player standing in front
+	// of one is shown huge. While the screen is open the camera's collision layer
+	// collides with nothing; the whole layer table is put back on close.
+	std::optional<std::array<std::uint64_t, 64>> savedLayerBits;
+
+	void SetCameraCollision(bool a_enabled)
+	{
+		auto* filter = RE::bhkCollisionFilter::GetSingleton();
+		if (!filter) {
+			return;
+		}
+		auto& rows = filter->layerBitfields;
+		if (!a_enabled && !savedLayerBits) {
+			savedLayerBits.emplace();
+			std::copy(std::begin(rows), std::end(rows), savedLayerBits->begin());
+			constexpr auto layer = static_cast<std::size_t>(RE::COL_LAYER::kCameraSphere);
+			for (auto& row : rows) {
+				row &= ~(std::uint64_t{ 1 } << layer);
+			}
+			rows[layer] = 0;
+			logger::info("Camera collision off");
+		} else if (a_enabled && savedLayerBits) {
+			std::copy(savedLayerBits->begin(), savedLayerBits->end(), std::begin(rows));
+			savedLayerBits.reset();
+			logger::info("Camera collision restored");
+		}
+	}
 }
 
 bool CameraStage::Enter(const Config& a_config)
@@ -547,6 +581,9 @@ bool CameraStage::Enter(const Config& a_config)
 	settings.Set("fAutoVanityModeDelay:Camera", 10800.0f);  // no idle orbit while the screen is open
 	settings.Set("fMouseWheelZoomSpeed:Camera", 10000.0f);  // snap instead of gliding into place
 
+	if (a_config.noCameraCollision) {
+		SetCameraCollision(false);
+	}
 	third->pitchZoomOffset = 0.1f;  // distance independent of pitch
 	third->posOffsetExpected = third->posOffsetActual = RE::NiPoint3(a_config.offsetX, 0.0f, a_config.offsetZ);
 
@@ -578,6 +615,8 @@ void CameraStage::Leave()
 	}
 	saved.active = false;
 
+	// Before the camera's last update below, so it comes back out of walls normally.
+	SetCameraCollision(true);
 	DetachBackdrop();
 	ShowWorld();
 	SetHudHidden(false);
