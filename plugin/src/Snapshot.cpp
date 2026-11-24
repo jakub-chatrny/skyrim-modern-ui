@@ -2,6 +2,8 @@
 
 #include "Snapshot.h"
 
+#include <unordered_set>
+
 #include "Equipment.h"
 #include "Outfits.h"
 #include "Thumbnails.h"
@@ -61,6 +63,8 @@ namespace
 		}
 	}
 
+	std::string FillDescription(std::string_view a_template, float a_magnitude, float a_duration);
+
 	// One equipped item as the schema's SlotItem, or null for an empty slot.
 	json SlotItem(Slot a_slot, const Equipment::Item& a_item)
 	{
@@ -116,6 +120,28 @@ namespace
 			stats.push_back(Stat("Weight", Number(entry->GetWeight(), 1)));
 		}
 
+		// Enchantment, as the inventory describes it: the player's own
+		// enchantment on this copy first, else the item's built-in one.
+		std::string enchantment;
+		RE::EnchantmentItem* enchanting = entry ? entry->GetEnchantment() : nullptr;
+		if (!enchanting) {
+			if (const auto* enchantable = form->As<RE::TESEnchantableForm>()) {
+				enchanting = enchantable->formEnchanting;
+			}
+		}
+		if (enchanting) {
+			for (const auto* effect : enchanting->effects) {
+				if (!effect || !effect->baseEffect) {
+					continue;
+				}
+				auto text = FillDescription(effect->baseEffect->magicItemDescription.c_str(), effect->GetMagnitude(),
+					static_cast<float>(effect->GetDuration()));
+				if (!text.empty()) {
+					enchantment += enchantment.empty() ? text : " " + text;
+				}
+			}
+		}
+
 		// A picture is asked for the first time an item is reported, and
 		// reported once it exists.
 		Thumbnails::Request(form);
@@ -128,6 +154,7 @@ namespace
 			{ "type", type },
 			{ "icon", icon },
 			{ "stats", std::move(stats) },
+			{ "enchantment", enchantment.empty() ? json(nullptr) : json(enchantment) },
 		};
 	}
 
@@ -167,7 +194,8 @@ namespace
 	RE::TESGlobal* FindGlobal(std::string_view a_editorID);
 
 	// "Restore <mag> points of Health for <dur> seconds." -> numbers filled in,
-	// <Global=Name> replaced by that global's value, any other <tag> dropped.
+	// <Global=Name> replaced by that global's value, <50> kept as 50, any other
+	// <tag> dropped.
 	std::string FillDescription(std::string_view a_template, float a_magnitude, float a_duration)
 	{
 		std::string out;
@@ -187,6 +215,9 @@ namespace
 				out += Number(a_magnitude);
 			} else if (tag == "dur") {
 				out += Number(a_duration);
+			} else if (!tag.empty() && tag.find_first_not_of("0123456789.") == std::string_view::npos) {
+				// Ability texts write fixed numbers as <50>; the game shows them bold.
+				out += tag;
 			} else if (tag.starts_with("Global=")) {
 				if (auto* global = FindGlobal(tag.substr(7))) {
 					out += Number(global->value);
@@ -195,6 +226,38 @@ namespace
 			i = end + 1;
 		}
 		return out;
+	}
+
+	std::string ActorValueName(AV a_value)
+	{
+		if (a_value == AV::kNone) {
+			return {};
+		}
+		const char* name = RE::ActorValueList::GetActorValueName(a_value);
+		return name ? name : "";
+	}
+
+	const char* SpellSource(const RE::MagicItem* a_spell)
+	{
+		if (!a_spell) {
+			return "other";
+		}
+		using Type = RE::MagicSystem::SpellType;
+		switch (a_spell->GetSpellType()) {
+		case Type::kSpell: return "spell";
+		case Type::kDisease: return "disease";
+		case Type::kPower: return "power";
+		case Type::kLesserPower: return "lesserPower";
+		case Type::kAbility: return "ability";
+		case Type::kPoison: return "poison";
+		case Type::kEnchantment:
+		case Type::kStaffEnchantment: return "enchantment";
+		case Type::kPotion: return "potion";
+		case Type::kIngredient: return "ingredient";
+		case Type::kVoicePower: return "shout";
+		case Type::kAddiction: return "addiction";
+		default: return "other";
+		}
 	}
 
 	// Active effects as the Magic menu's "Active Effects" list shows them: one
@@ -208,9 +271,23 @@ namespace
 			float       remaining = -1.0f;  // seconds; -1 = no end (abilities)
 			bool        positive = true;
 			const char* kind = "other";
+			// What the effect is, for the UI to pick its icon.
+			const char* source = "other";  // spell type: spell, ability, disease, potion, ...
+			bool        racial = false;     // granted by the player's race
+			std::string av;                 // the actor value it changes ("OneHanded", "ResistFire")
+			std::string archetype;          // "ValueModifier", "Cloak", "Paralysis", ...
+			std::string school;             // magic skill ("Alteration"), empty for none
 		};
 		std::vector<Row>                                rows;
 		std::unordered_map<const RE::MagicItem*, std::size_t> bySpell;
+
+		// Abilities the player's race grants (Nord frost resistance, Khajiit claws).
+		std::unordered_set<const RE::MagicItem*> racialSpells;
+		if (const auto* race = a_player->GetRace(); race && race->actorEffects) {
+			for (std::uint32_t i = 0; i < race->actorEffects->numSpells; ++i) {
+				racialSpells.insert(race->actorEffects->spells[i]);
+			}
+		}
 
 		auto* list = a_player->AsMagicTarget()->GetActiveEffectList();
 		if (!list) {
@@ -267,6 +344,11 @@ namespace
 			} else if (base->data.resistVariable == AV::kResistFrost || base->data.primaryAV == AV::kResistFrost) {
 				row.kind = "cold";
 			}
+			row.source = SpellSource(spell);
+			row.racial = spell && racialSpells.contains(spell);
+			row.av = ActorValueName(base->data.primaryAV);
+			row.archetype = RE::EffectArchetypes::GetArchetypeName(base->GetArchetype());
+			row.school = ActorValueName(base->GetMagickSkill());
 			if (spell) {
 				bySpell.emplace(spell, rows.size());
 			}
@@ -281,6 +363,11 @@ namespace
 				{ "remaining", row.remaining },
 				{ "positive", row.positive },
 				{ "kind", row.kind },
+				{ "source", row.source },
+				{ "racial", row.racial },
+				{ "av", std::move(row.av) },
+				{ "archetype", std::move(row.archetype) },
+				{ "school", std::move(row.school) },
 			});
 		}
 		return out;

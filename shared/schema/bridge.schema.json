@@ -243,13 +243,54 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "description", "remaining", "positive", "kind"],
+            "required": [
+              "name",
+              "description",
+              "remaining",
+              "positive",
+              "kind"
+            ],
             "properties": {
-              "name": { "type": "string" },
-              "description": { "type": "string" },
-              "remaining": { "type": "number", "description": "Seconds left; -1 when the effect does not run out." },
-              "positive": { "type": "boolean" },
-              "kind": { "enum": ["cold", "food", "other"] }
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "remaining": {
+                "type": "number",
+                "description": "Seconds left; -1 when the effect does not run out."
+              },
+              "positive": {
+                "type": "boolean"
+              },
+              "kind": {
+                "enum": [
+                  "cold",
+                  "food",
+                  "other"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "description": "Spell type: spell, ability, disease, power, lesserPower, poison, enchantment, potion, ingredient, shout, addiction, other."
+              },
+              "racial": {
+                "type": "boolean",
+                "description": "Granted by the player's race."
+              },
+              "av": {
+                "type": "string",
+                "description": "Actor value the effect changes (OneHanded, ResistFire, ...); empty for none."
+              },
+              "archetype": {
+                "type": "string",
+                "description": "Effect archetype (ValueModifier, Cloak, Paralysis, ...)."
+              },
+              "school": {
+                "type": "string",
+                "description": "Magic skill of the effect (Alteration, ...); empty for none."
+              }
             }
           }
         }
@@ -369,6 +410,13 @@
                 "null"
               ],
               "description": "URL of the item's cached picture, or null while there is none. Made in game by plugin/src/Thumbnails.cpp."
+            },
+            "enchantment": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What the item's enchantment does, as the inventory describes it; null when it has none."
             }
           }
         }
@@ -562,6 +610,13 @@
             "null"
           ],
           "description": "URL of the item's cached picture, or null while there is none. Made in game by plugin/src/Thumbnails.cpp."
+        },
+        "enchantment": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "What the item's enchantment does, as the inventory describes it; null when it has none."
         }
       }
     },

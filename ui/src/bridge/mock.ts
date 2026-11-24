@@ -7,12 +7,20 @@ import type { Command, InventoryItem, SlotId, SlotItem, Snapshot } from './types
 // structuredClone is not guaranteed in Ultralight's WebKit; keep one way of copying.
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
-const item = (formId: string, name: string, type: SlotItem['type'], icon: string, stats: [string, string][]): SlotItem => ({
+const item = (
+  formId: string,
+  name: string,
+  type: SlotItem['type'],
+  icon: string,
+  stats: [string, string][],
+  enchantment?: string,
+): SlotItem => ({
   formId,
   name,
   type,
   icon,
   stats: stats.map(([label, value]) => ({ label, value })),
+  enchantment: enchantment ?? null,
 })
 
 // Extra things "in the inventory", per slot, besides what the fixture has equipped.
@@ -35,9 +43,20 @@ const SPARE: Partial<Record<SlotId, [SlotItem, number][]>> = {
     [item('0x0001359D', 'Iron Greatsword', 'weapon', 'weapon-greatsword', [['Damage', '15'], ['Speed', '0.70'], ['Weight', '16.0']]), 1],
     [item('0x0001397E', 'Iron Dagger', 'weapon', 'weapon-dagger', [['Damage', '4'], ['Speed', '1.30'], ['Weight', '2.0']]), 3],
   ],
-  neck: [[item('0x000C8915', 'Amulet of Akatosh', 'jewelry', 'jewelry-neck', [['Weight', '1.0']]), 1]],
+  neck: [
+    [
+      item('0x000C8915', 'Amulet of Akatosh', 'jewelry', 'jewelry-neck', [['Weight', '1.0']],
+        'Magicka regenerates 25% faster.'),
+      1,
+    ],
+  ],
   ring: [
     [item('0x0001CF2B', 'Gold Ring', 'jewelry', 'jewelry-ring', [['Weight', '0.3']]), 2],
+    [
+      item('0x000877F1', 'Gold Ring of Major Wielding', 'jewelry', 'jewelry-ring', [['Weight', '0.3']],
+        'One-handed weapons do 25% more damage.'),
+      1,
+    ],
     [item('0x0003B97C', 'Silver Ring', 'jewelry', 'jewelry-ring', [['Weight', '0.3']]), 1],
   ],
   ranged: [[item('0x0003B562', 'Long Bow', 'weapon', 'weapon-bow', [['Damage', '6'], ['Speed', '1.00'], ['Weight', '5.0']]), 1]],

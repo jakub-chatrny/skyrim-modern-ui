@@ -279,7 +279,8 @@
           "label": "Shout cooldown",
           "value": "-20%"
         }
-      ]
+      ],
+      "enchantment": "Restoration spells cost 10% less to cast."
     },
     "ring": null,
     "ranged": {
@@ -329,24 +330,111 @@
   "effects": [
     {
       "name": "Chilled",
-      "description": "−15% stamina regeneration",
+      "description": "Stamina regenerates 15% slower.",
       "remaining": -1,
       "positive": false,
-      "kind": "cold"
+      "kind": "cold",
+      "source": "ability",
+      "racial": false,
+      "av": "StaminaRate",
+      "archetype": "ValueModifier",
+      "school": ""
+    },
+    {
+      "name": "Peckish",
+      "description": "Stamina regenerates 10% slower.",
+      "remaining": -1,
+      "positive": false,
+      "kind": "other",
+      "source": "ability",
+      "racial": false,
+      "av": "StaminaRate",
+      "archetype": "ValueModifier",
+      "school": ""
+    },
+    {
+      "name": "Oakflesh",
+      "description": "Armor rating increased by 40 points.",
+      "remaining": 84,
+      "positive": true,
+      "kind": "other",
+      "source": "spell",
+      "racial": false,
+      "av": "DamageResist",
+      "archetype": "ValueModifier",
+      "school": "Alteration"
     },
     {
       "name": "Venison Stew",
-      "description": "+5% health regeneration",
+      "description": "Stamina regenerates 5% faster.",
       "remaining": 240,
       "positive": true,
-      "kind": "food"
+      "kind": "food",
+      "source": "potion",
+      "racial": false,
+      "av": "StaminaRate",
+      "archetype": "ValueModifier",
+      "school": ""
     },
     {
-      "name": "Skaði’s Favour",
-      "description": "+15% damage to beasts",
-      "remaining": 64800,
+      "name": "Blessing of Talos",
+      "description": "Shouts recharge 20% faster.",
+      "remaining": 27720,
       "positive": true,
-      "kind": "other"
+      "kind": "other",
+      "source": "ability",
+      "racial": false,
+      "av": "ShoutRecoveryMult",
+      "archetype": "ValueModifier",
+      "school": ""
+    },
+    {
+      "name": "Fortify Illusion",
+      "description": "Illusion spells cost 30% less to cast.",
+      "remaining": -1,
+      "positive": true,
+      "kind": "other",
+      "source": "enchantment",
+      "racial": false,
+      "av": "IllusionMod",
+      "archetype": "ValueModifier",
+      "school": "Illusion"
+    },
+    {
+      "name": "Rockjoint",
+      "description": "Melee attacks deal 25% less damage.",
+      "remaining": -1,
+      "positive": false,
+      "kind": "other",
+      "source": "disease",
+      "racial": false,
+      "av": "OneHandedModifier",
+      "archetype": "ValueModifier",
+      "school": ""
+    },
+    {
+      "name": "The Warrior Stone",
+      "description": "All combat skills increase 20% faster.",
+      "remaining": -1,
+      "positive": true,
+      "kind": "other",
+      "source": "ability",
+      "racial": false,
+      "av": "OneHandedSkillAdvance",
+      "archetype": "ValueModifier",
+      "school": ""
+    },
+    {
+      "name": "Resist Frost",
+      "description": "Your Nord blood gives you 50% resistance to Frost.",
+      "remaining": -1,
+      "positive": true,
+      "kind": "cold",
+      "source": "ability",
+      "racial": true,
+      "av": "ResistFrost",
+      "archetype": "ValueModifier",
+      "school": ""
     }
   ]
 }

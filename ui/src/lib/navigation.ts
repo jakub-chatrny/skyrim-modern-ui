@@ -37,8 +37,8 @@ export interface NavigationOptions {
   onShoulder?: (step: -1 | 1) => void
   /** CSS selectors for the control that gets focus first, tried in order; default is the first control. */
   initial?: string[]
-  /** Keys (lower case) the caller handles itself, taking them from movement. */
-  hotkeys?: Record<string, () => void>
+  /** Keys (lower case) the caller handles itself, taking them from movement. Returning false hands the key back. */
+  hotkeys?: Record<string, () => void | boolean>
 }
 
 declare global {
@@ -130,8 +130,8 @@ export function attachNavigation(root: HTMLElement, options: NavigationOptions =
   const handleKey = (key: string): boolean => {
     const hotkey = options.hotkeys?.[key]
     const direction = KEY_DIRECTIONS[key]
-    if (hotkey) {
-      hotkey()
+    if (hotkey && hotkey() !== false) {
+      // handled
     } else if (direction) {
       move(direction)
     } else if (key === 'enter' || key === ' ') {

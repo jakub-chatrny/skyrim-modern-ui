@@ -10,6 +10,8 @@
   import skillTrack from '../assets/design/iter4/skill-track.svg'
   import tabUnderline from '../assets/design/iter4/tab-underline.svg'
   import type { Skill, Snapshot } from '../bridge/types'
+  import { DAMAGE, ELEMENT, RESIST, SKILL, TREE } from '../lib/glyphs'
+  import Glyph from './Glyph.svelte'
   import SectionHeader from './SectionHeader.svelte'
 
   let { snapshot }: { snapshot: Snapshot } = $props()
@@ -17,17 +19,23 @@
   const whole = (v: number) => String(Math.round(v))
   const percent = (v: number) => `${whole(v)}%`
 
-  const defense = $derived([
-    ['Armor', whole(snapshot.resistances.armor)],
-    ['Magic', percent(snapshot.resistances.magic)],
-    ['Fire', percent(snapshot.resistances.fire)],
-    ['Frost', percent(snapshot.resistances.frost)],
+  type Figure = { label: string; value: string; path: string; color: string }
+  const defense = $derived<Figure[]>([
+    { label: 'Armor', value: whole(snapshot.resistances.armor), ...RESIST.armor },
+    { label: 'Magic', value: percent(snapshot.resistances.magic), ...RESIST.magic },
+    { label: 'Fire', value: percent(snapshot.resistances.fire), ...RESIST.fire },
+    { label: 'Frost', value: percent(snapshot.resistances.frost), ...RESIST.frost },
   ])
   // The design shows ranges (38–46); the game has one number per weapon.
-  const damage = $derived([
-    ['Melee', whole(snapshot.damage.rightHand)],
-    ['Ranged', snapshot.damage.ranged > 0 ? whole(snapshot.damage.ranged) : '–'],
-    ['Magic', percent(snapshot.damage.magicPower)],
+  const damage = $derived<Figure[]>([
+    { label: 'Melee', value: whole(snapshot.damage.rightHand), ...DAMAGE.physical },
+    {
+      label: 'Ranged',
+      value: snapshot.damage.ranged > 0 ? whole(snapshot.damage.ranged) : '–',
+      path: SKILL.Archery.path,
+      color: ELEMENT.physical,
+    },
+    { label: 'Magic', value: percent(snapshot.damage.magicPower), ...DAMAGE.magic },
   ])
 
   // The three skill trees as the game groups them, in the design's order.
@@ -55,16 +63,16 @@
   <section>
     <SectionHeader title="Defense" line={defenseLine} />
     <dl class="numbers four">
-      {#each defense as [label]}<dt>{label}</dt>{/each}
-      {#each defense as [, value]}<dd>{value}</dd>{/each}
+      {#each defense as figure}<dt><Glyph path={figure.path} color={figure.color} size={24} />{figure.label}</dt>{/each}
+      {#each defense as figure}<dd>{figure.value}</dd>{/each}
     </dl>
   </section>
 
   <section>
     <SectionHeader title="Damage" line={damageLine} />
     <dl class="numbers three">
-      {#each damage as [label]}<dt>{label}</dt>{/each}
-      {#each damage as [, value]}<dd>{value}</dd>{/each}
+      {#each damage as figure}<dt><Glyph path={figure.path} color={figure.color} size={24} />{figure.label}</dt>{/each}
+      {#each damage as figure}<dd>{figure.value}</dd>{/each}
     </dl>
   </section>
 
@@ -82,7 +90,10 @@
       {#each skills as skill}
         <!-- Not in the design: the skill level, muted, after the name. -->
         <li>
-          <p class="skill-name">{skill.name} <span class="level">{skill.level}</span></p>
+          <p class="skill-name">
+            {#if SKILL[skill.id]}<Glyph path={SKILL[skill.id].path} color={TREE[SKILL[skill.id].tree]} size={26} />{/if}
+            {skill.name} <span class="level">{skill.level}</span>
+          </p>
           <span class="skill-bar" title="Level {skill.level}">
             <span class="track">
               <img alt="" class="part" src={skillFill} style="width: {clamp(skill.level / 100) * 100}%" />
@@ -133,9 +144,14 @@
     column-gap: 50px;
   }
   dt {
+    display: flex;
+    align-items: center;
     font-family: var(--font-label);
     font-size: 22px;
     color: var(--label);
+  }
+  dt > :global(svg) {
+    margin-right: 8px;
   }
   dd {
     margin: 0;
@@ -192,10 +208,15 @@
     margin-top: 24px;
   }
   .skill-name {
+    display: flex;
+    align-items: center;
     font-family: var(--font-medium);
     font-weight: 500;
     font-size: 24px;
     white-space: nowrap;
+  }
+  .skill-name > :global(svg) {
+    margin-right: 10px;
   }
   .level {
     margin-left: 6px;

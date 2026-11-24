@@ -145,3 +145,11 @@ only for SE (ID 49980), not for AE 1.6+/1.7.
    Status 2026-11-24: flat walls, corners and the tree case work (with retries); a low roof edge right in front
    of the head still pulls the camera in. Each open logs the camera's real distance at frame 6 and any retries
    ("Walls: retry …"). Parked; the README lists it as a known issue.
+
+## Ideas for later
+
+- **Lighting the character (user, 2026-11-24).** In the screen the character is lit by the world: weather, time of
+  day and where they stand all change it, so at night or in a dark interior they come out dark. Wanted: always
+  well lit. Likely approach: while the screen is open, attach our own light (a `NiPointLight`, or a light from a
+  game mesh such as the inventory's light rig) to the player's 3D next to the camera, the way the backdrop is
+  attached, and remove it on close; perhaps also hold the sun/ambient colours while open.

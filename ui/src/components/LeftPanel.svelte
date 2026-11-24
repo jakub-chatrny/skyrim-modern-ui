@@ -6,15 +6,12 @@
   import diamondHealth from '../assets/design/iter4/diamond-health.svg'
   import diamondMana from '../assets/design/iter4/diamond-mana.svg'
   import diamondStamina from '../assets/design/iter4/diamond-stamina.svg'
-  import iconOther from '../assets/design/iter4/icon-bow-small.svg'
-  import iconCold from '../assets/design/iter4/icon-cold.svg'
-  import iconFood from '../assets/design/iter4/icon-food.svg'
-  import iconSleep from '../assets/design/iter4/icon-sleep.svg'
-  import iconThirst from '../assets/design/iter4/icon-thirst.svg'
   import pipEmpty from '../assets/design/iter4/pip-empty.svg'
   import pipFilled from '../assets/design/iter4/pip-filled.svg'
   import pipWarm from '../assets/design/iter4/pip-warm.svg'
   import type { ActiveEffect, Gauge, Snapshot } from '../bridge/types'
+  import { DROP, EFFECT, effectGlyph, FAMILY } from '../lib/glyphs'
+  import Glyph from './Glyph.svelte'
   import SectionHeader from './SectionHeader.svelte'
 
   let { snapshot }: { snapshot: Snapshot } = $props()
@@ -22,7 +19,6 @@
   // The column has room for this many effect rows above the condition block.
   const MAX_EFFECTS = 8
 
-  const effectIcon: Record<ActiveEffect['kind'], string> = { cold: iconCold, food: iconFood, other: iconOther }
 
   // Cold lasts until the player warms up; other effects without an end are abilities.
   function duration(seconds: number, kind: ActiveEffect['kind']): string {
@@ -35,7 +31,7 @@
   const effects = $derived((snapshot.effects ?? []).slice(0, MAX_EFFECTS))
 
   // A need as five pips, full when the player is fine, and a word for it.
-  type Need = { icon: string; label: string; pips: number; state: string; warm: boolean }
+  type Need = { icon: string; color: string; label: string; pips: number; state: string; warm: boolean }
   const PIPS = 5
   const pipsOf = (gauge: Gauge) => Math.round((gauge.max > 0 ? gauge.current / gauge.max : 0) * PIPS)
   // States by pip count, 0 .. 5.
@@ -54,12 +50,15 @@
       const gauge = survival[key]
       if (!gauge) return
       const pips = pipsOf(gauge)
-      list.push({ icon, label, pips, state: states[key][pips], warm: key === 'warmth' })
+      // Low needs turn to the affliction colour, as the canvas's "Cold · Freezing".
+      const color = pips <= 1 ? FAMILY.curse : FAMILY.need
+      list.push({ icon, color, label, pips, state: states[key][pips], warm: key === 'warmth' })
     }
-    add('energy', iconSleep, 'Sleep')
-    add('hunger', iconFood, 'Hunger')
-    add('thirst', iconThirst, 'Thirst')
-    add('warmth', iconCold, 'Warmth')
+    // Survival Needs icons from the effect icon canvas; thirst has none there.
+    add('energy', EFFECT.fatigue, 'Sleep')
+    add('hunger', EFFECT.hunger, 'Hunger')
+    add('thirst', DROP, 'Thirst')
+    add('warmth', EFFECT.cold, 'Warmth')
     return list
   })
 
@@ -78,7 +77,8 @@
     {#if effects.length}
       <div class="effect-grid">
         {#each effects as effect}
-          <span class="effect-icon"><img alt="" src={effectIcon[effect.kind]} /></span>
+          {@const glyph = effectGlyph(effect)}
+          <span class="effect-icon"><Glyph path={glyph.path} color={glyph.color} dashed={glyph.dashed} size={40} framed /></span>
           <div class="effect-text">
             <p class="effect-name">{effect.name}</p>
             {#if effect.description}
@@ -98,7 +98,7 @@
       <SectionHeader title="Condition" line={condLine} lineHeight={10} gap={19} />
       <div class="need-grid">
         {#each needs as need}
-          <span class="need-icon"><img alt="" src={need.icon} /></span>
+          <span class="need-icon"><Glyph path={need.icon} color={need.color} size={28} /></span>
           <p class="need-label">{need.label}</p>
           <span class="pips">
             {#each Array(PIPS) as _, index}
@@ -155,19 +155,27 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 40px;
+    height: 40px;
+  }
+  .need-icon {
     width: 32px;
     height: 32px;
-  }
-  .effect-icon img,
-  .need-icon img {
-    display: block;
   }
   .effect-text {
     min-width: 0;
   }
+  /* Descriptions wrap: they are the useful part. */
   .effect-text p {
+    white-space: normal;
+  }
+  /* Effects take the room above the condition block and never run into it;
+     with very many long descriptions the last rows are cut at the bottom. */
+  .effects {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-bottom: 24px;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
   .positive {
     color: var(--positive);

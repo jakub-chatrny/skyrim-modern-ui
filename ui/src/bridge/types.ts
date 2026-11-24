@@ -37,6 +37,8 @@ export interface SlotItem {
   /** URL of the item's picture, made in game and cached; absent or null while there is none. */
   thumb?: string | null
   stats: { label: string; value: string }[]
+  /** What the enchantment does; absent or null when there is none. */
+  enchantment?: string | null
 }
 
 /** An item in the inventory that could go into a slot. */
@@ -74,6 +76,12 @@ export interface ActiveEffect {
   remaining: number
   positive: boolean
   kind: 'cold' | 'food' | 'other'
+  /** What the effect is, for its icon. Older plugins do not send these. */
+  source?: string
+  racial?: boolean
+  av?: string
+  archetype?: string
+  school?: string
 }
 
 export interface Snapshot {

@@ -709,6 +709,24 @@ void Thumbnails::Install()
 		return;
 	}
 
+	// Pictures from before v2 (opaque, on black) sit in the parent folder and
+	// are no longer shown; remove them, and their failure list.
+	{
+		const auto oldDir = std::filesystem::path(CACHE_DIR).parent_path();
+		std::size_t removed = 0;
+		for (const auto& entry : std::filesystem::directory_iterator(oldDir, error)) {
+			const auto extension = entry.path().extension();
+			if (entry.is_regular_file() && (extension == ".png" || entry.path().filename() == FAILED_FILE)) {
+				std::error_code removeError;
+				removed += std::filesystem::remove(entry.path(), removeError) ? 1 : 0;
+			}
+		}
+		if (removed > 0) {
+			logger::info("Thumbnails: removed {} old picture file(s) from {}", removed, oldDir.string());
+		}
+		error.clear();
+	}
+
 	{
 		std::scoped_lock lock(stateLock);
 		for (const auto& entry : std::filesystem::directory_iterator(CACHE_DIR, error)) {

@@ -21,6 +21,7 @@
   import LeftPanel from '../components/LeftPanel.svelte'
   import RightPanel from '../components/RightPanel.svelte'
   import TopBar from '../components/TopBar.svelte'
+  import { itemIcon } from '../lib/icons'
   import { attachNavigation } from '../lib/navigation'
 
   let {
@@ -80,6 +81,15 @@
   >
 
   let picker = $state<{ slot: SlotId; x: number; y: number; tile: HTMLElement } | null>(null)
+
+  // The slot whose tile has focus (keyboard or mouse); its item is described
+  // in the footer. Not in the design: there is no other place that names the item.
+  let focusedSlot = $state<SlotId | null>(null)
+  function onFocusIn(event: FocusEvent) {
+    const tile = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-slot]') : null
+    focusedSlot = (tile?.dataset.slot as SlotId | undefined) ?? null
+  }
+  const focusedItem = $derived(focusedSlot ? snapshot.equipment[focusedSlot] : null)
   let pickerElement = $state<HTMLElement>()
   // Only the answer for the slot that is open counts; an older one may still arrive.
   const pickerItems = $derived(picker && itemList && itemList.slot === picker.slot ? itemList.items : null)
@@ -163,6 +173,10 @@
             e: () => console.log('[ui] E: no other tab yet'),
             a: () => stepOutfit(-1),
             d: () => stepOutfit(1),
+            // A / D are the outfits, so W / S alone could not reach the bottom
+            // row: on a tile they go round the arch instead.
+            w: () => stepTile(-1),
+            s: () => stepTile(1),
             '1': () => onOutfit(0),
             '2': () => onOutfit(1),
             '3': () => onOutfit(2),
@@ -170,6 +184,21 @@
           },
     })
   })
+
+  // Round the arch: down the left column, along the bottom, up the right.
+  const RING: SlotId[] = [
+    ...left.map(([slot]) => slot),
+    ...bottom.map(([slot]) => slot),
+    ...right.map(([slot]) => slot).reverse(),
+  ]
+  function stepTile(step: -1 | 1): boolean {
+    const slot = (document.activeElement as HTMLElement | null)?.dataset?.slot as SlotId | undefined
+    const index = slot ? RING.indexOf(slot) : -1
+    if (index < 0) return false  // not on a tile: plain up / down
+    const next = RING[(index + step + RING.length) % RING.length]
+    canvas?.querySelector<HTMLElement>(`[data-slot="${next}"]`)?.focus()
+    return true
+  }
 
   function stepOutfit(step: -1 | 1) {
     const count = snapshot.outfits.defined.length
@@ -189,6 +218,7 @@
   <div
     class="canvas"
     bind:this={canvas}
+    onfocusin={onFocusIn}
     style="transform: translate({offsetX}px, {offsetY}px) scale({scale}); width: {CANVAS_WIDTH}px; height: {CANVAS_HEIGHT}px;"
   >
     <TopBar player={snapshot.player} outfits={snapshot.outfits} onoutfit={onOutfit} />
@@ -235,6 +265,22 @@
 
     <!-- The design's "esc Close": the screen is closed with F4 only, Esc stays the game's. -->
     <footer>
+      <div class="details">
+        {#if focusedSlot}
+          <p class="details-name">
+            <img class="details-icon" alt="" src={focusedItem ? itemIcon(focusedSlot, focusedItem) : slotIcons[focusedSlot]} />
+            {focusedItem ? focusedItem.name : labels[focusedSlot]}
+            {#if focusedItem}
+              <span class="details-stats">
+                {focusedItem.stats.map((stat) => `${stat.label} ${stat.value}`).join(' · ')}
+              </span>
+            {:else}
+              <span class="details-stats">Empty</span>
+            {/if}
+          </p>
+          {#if focusedItem?.enchantment}<p class="details-enchantment">{focusedItem.enchantment}</p>{/if}
+        {/if}
+      </div>
       <Hotkey key="enter" action="Equip" />
       <Hotkey key="F4" action="Close" />
     </footer>
@@ -360,5 +406,44 @@
   }
   footer > :global(* + *) {
     margin-left: 10px;
+  }
+  .details {
+    flex: 1 1 0;
+    min-width: 0;
+    margin-right: 24px;
+    line-height: normal;
+  }
+  .details-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .details-icon {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    margin-right: 10px;
+    vertical-align: -5px;
+  }
+  .details-name {
+    font-family: var(--font-medium);
+    font-weight: 500;
+    font-size: 24px;
+    color: var(--ink);
+  }
+  .details-stats {
+    margin-left: 16px;
+    font-family: var(--font-label);
+    font-weight: 400;
+    font-size: 20px;
+    color: var(--muted);
+  }
+  .details-enchantment {
+    margin-top: 4px;
+    font-family: var(--font-medium);
+    font-weight: 500;
+    font-style: italic;
+    font-size: 20px;
+    color: var(--accent);
   }
 </style>

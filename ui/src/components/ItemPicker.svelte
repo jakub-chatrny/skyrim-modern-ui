@@ -34,6 +34,24 @@
     onunequip: () => void
     onclose: () => void
   } = $props()
+
+  // Armor and damage compared with what the slot holds now: "+4", "−2", or
+  // nothing when equal or this is the equipped item. An item without the stat
+  // counts as 0 (a hood in place of a helmet loses all its armor).
+  const COMPARED = ['Armor', 'Damage']
+  const statValue = (stats: InventoryItem['stats'], label: string) =>
+    parseFloat(stats.find((stat) => stat.label === label)?.value ?? '0') || 0
+  function delta(item: InventoryItem, label: string): { text: string; better: boolean } | null {
+    if (item.equipped || !current) return null
+    const difference = Math.round(statValue(item.stats, label) - statValue(current.stats, label))
+    if (difference === 0) return null
+    return { text: difference > 0 ? `+${difference}` : `−${-difference}`, better: difference > 0 }
+  }
+  // Compared stats the row lacks but the equipped item has, shown as a loss.
+  const missing = (item: InventoryItem) =>
+    item.equipped || !current
+      ? []
+      : COMPARED.filter((label) => !item.stats.some((stat) => stat.label === label) && statValue(current.stats, label) > 0)
 </script>
 
 <!-- Anything outside the popup closes it. -->
@@ -68,12 +86,23 @@
             <span class="name">{item.name}</span>
             <span class="stats">
               {#each item.stats.slice(0, 4) as stat}
+                {@const change = COMPARED.includes(stat.label) ? delta(item, stat.label) : null}
                 <span class="stat">
                   {#if itemStatIcon(stat.label)}<img alt={stat.label} src={itemStatIcon(stat.label)} />{/if}
                   {stat.value}
+                  {#if change}<span class="delta" class:better={change.better} class:worse={!change.better}>{change.text}</span>{/if}
+                </span>
+              {/each}
+              {#each missing(item) as label}
+                {@const change = delta(item, label)}
+                <span class="stat">
+                  {#if itemStatIcon(label)}<img alt={label} src={itemStatIcon(label)} />{/if}
+                  0
+                  {#if change}<span class="delta worse">{change.text}</span>{/if}
                 </span>
               {/each}
             </span>
+            {#if item.enchantment}<span class="enchantment">{item.enchantment}</span>{/if}
           </span>
           <span class="side">
             {#if item.equipped}<span class="tag">Equipped</span>{/if}
@@ -206,9 +235,6 @@
     color: var(--ink);
     font-size: 22px;
     line-height: normal;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .stats {
     display: flex;
@@ -255,5 +281,25 @@
     font-weight: 500;
     font-size: 20px;
     color: var(--muted);
+  }
+  .delta {
+    margin-left: 4px;
+    font-size: 15px;
+  }
+  .delta.better {
+    color: var(--positive);
+  }
+  .delta.worse {
+    color: var(--negative);
+  }
+  .enchantment {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--font-medium);
+    font-weight: 500;
+    font-style: italic;
+    font-size: 15px;
+    line-height: normal;
+    color: var(--accent);
   }
 </style>
