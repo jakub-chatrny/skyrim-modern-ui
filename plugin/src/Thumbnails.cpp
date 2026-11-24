@@ -39,8 +39,9 @@ namespace
 {
 	// Inside the page's own folder, addressed relative to the page, the same way
 	// its bundled assets load. scripts/deploy.sh keeps this folder.
-	constexpr auto CACHE_DIR = "Data/PrismaUI/views/SkyrimModernUI/thumbs";
-	constexpr auto CACHE_URL = "thumbs/";
+	// v2: transparent background (v1 pictures, opaque on black, are left unused).
+	constexpr auto CACHE_DIR = "Data/PrismaUI/views/SkyrimModernUI/thumbs/v2";
+	constexpr auto CACHE_URL = "thumbs/v2/";
 	constexpr auto MENU_NAME = "SkyrimModernUI Pictures";
 	constexpr auto FAILED_FILE = "failed.txt";  // items whose picture could not be made
 
@@ -78,6 +79,7 @@ namespace
 
 	std::atomic<bool>   inSession{ false };  // Begin3D outstanding (set on menu show, cleared in PostDisplay)
 	RE::TESBoundObject* current = nullptr;
+	RE::FormID          currentID = 0;  // the form the picture is for (a spell's id, not its display model's)
 	int                 framesWaited = 0;
 	int                 framesLoaded = 0;
 	int                 teardownWaited = 0;
@@ -114,20 +116,24 @@ namespace
 			for (std::uint32_t x = 0; x < a_target; ++x) {
 				const std::uint32_t x0 = x * a_size / a_target;
 				const std::uint32_t x1 = std::max(x0 + 1, (x + 1) * a_size / a_target);
-				std::uint32_t       sum[4]{};
+				// Colours weighted by alpha, so transparent pixels do not darken edges.
+				std::uint64_t sum[3]{};
+				std::uint64_t alpha = 0;
 				for (std::uint32_t sy = y0; sy < y1; ++sy) {
 					for (std::uint32_t sx = x0; sx < x1; ++sx) {
 						const auto* p = a_rgba.data() + (static_cast<std::size_t>(sy) * a_size + sx) * 4;
-						for (int c = 0; c < 4; ++c) {
-							sum[c] += p[c];
+						for (int c = 0; c < 3; ++c) {
+							sum[c] += static_cast<std::uint64_t>(p[c]) * p[3];
 						}
+						alpha += p[3];
 					}
 				}
 				const std::uint32_t count = (y1 - y0) * (x1 - x0);
 				auto*               q = out.data() + (static_cast<std::size_t>(y) * a_target + x) * 4;
-				for (int c = 0; c < 4; ++c) {
-					q[c] = static_cast<std::uint8_t>(sum[c] / count);
+				for (int c = 0; c < 3; ++c) {
+					q[c] = alpha ? static_cast<std::uint8_t>(sum[c] / alpha) : 0;
 				}
+				q[3] = static_cast<std::uint8_t>(alpha / count);
 			}
 		}
 		return out;
@@ -384,46 +390,69 @@ namespace
 		desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
 		ID3D11Texture2D* readback = nullptr;
 		device->CreateTexture2D(&desc, nullptr, &readback);
+		ID3D11Texture2D* readbackWhite = nullptr;  // the same, painted over white
+		device->CreateTexture2D(&desc, nullptr, &readbackWhite);
 
 		bool ok = false;
-		if (saved && readback) {
+		if (saved && readback && readbackWhite) {
 			const D3D11_BOX box{ static_cast<UINT>(rect->left), static_cast<UINT>(rect->top), 0,
 				static_cast<UINT>(rect->left + rect->size), static_cast<UINT>(rect->top + rect->size), 1 };
 
 			// 1. Save what the frame shows there.
 			context->CopySubresourceRegion(saved, 0, 0, 0, 0, frame, 0, &box);
 
-			// 2. Clear it to black, the colour of the tile behind the picture.
+			// 2. Clear it, 3. the engine paints the item, 4. copy it out; once over
+			// black and once over white. Where the item is solid both agree; where it
+			// is transparent the background shows, and the difference gives the alpha.
 			ID3D11DeviceContext1* context1 = nullptr;
-			if (SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1), reinterpret_cast<void**>(&context1))) && context1) {
-				const D3D11_RECT clearRect{ rect->left, rect->top, rect->left + rect->size, rect->top + rect->size };
-				const FLOAT      black[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
-				context1->ClearView(target, black, &clearRect, 1);
+			context->QueryInterface(__uuidof(ID3D11DeviceContext1), reinterpret_cast<void**>(&context1));
+			const auto paint = [&](float a_background, ID3D11Texture2D* a_into) {
+				if (context1) {
+					const D3D11_RECT clearRect{ rect->left, rect->top, rect->left + rect->size, rect->top + rect->size };
+					const FLOAT      colour[4]{ a_background, a_background, a_background, 1.0f };
+					context1->ClearView(target, colour, &clearRect, 1);
+				}
+				a_manager->Render();
+				context->CopySubresourceRegion(a_into, 0, 0, 0, 0, frame, 0, &box);
+			};
+			paint(0.0f, readback);
+			paint(1.0f, readbackWhite);
+			if (context1) {
 				context1->Release();
 			}
-
-			// 3. The engine paints the item, 4. copy it out, 5. put the frame back.
-			a_manager->Render();
-			context->CopySubresourceRegion(readback, 0, 0, 0, 0, frame, 0, &box);
+			// 5. Put the frame back.
 			context->CopySubresourceRegion(frame, 0, static_cast<UINT>(rect->left), static_cast<UINT>(rect->top), 0, saved, 0, nullptr);
 
 			D3D11_MAPPED_SUBRESOURCE mapped{};
-			if (SUCCEEDED(context->Map(readback, 0, D3D11_MAP_READ, 0, &mapped))) {
+			D3D11_MAPPED_SUBRESOURCE mappedWhite{};
+			const bool               mappedBlack = SUCCEEDED(context->Map(readback, 0, D3D11_MAP_READ, 0, &mapped));
+			const bool               mappedOnWhite = mappedBlack && SUCCEEDED(context->Map(readbackWhite, 0, D3D11_MAP_READ, 0, &mappedWhite));
+			if (mappedBlack && mappedOnWhite) {
 				const auto                size = static_cast<std::uint32_t>(rect->size);
 				std::vector<std::uint8_t> pixels(static_cast<std::size_t>(size) * size * 4);
-				std::uint32_t             lit = 0;  // pixels that are not the cleared black
+				std::uint32_t             lit = 0;  // pixels with some of the item in them
 				for (std::uint32_t y = 0; y < size; ++y) {
-					const auto* source = static_cast<const std::uint8_t*>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch;
+					const auto* black = static_cast<const std::uint8_t*>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch;
+					const auto* white = static_cast<const std::uint8_t*>(mappedWhite.pData) + static_cast<std::size_t>(y) * mappedWhite.RowPitch;
 					auto*       out = pixels.data() + static_cast<std::size_t>(y) * size * 4;
 					for (std::uint32_t x = 0; x < size; ++x) {
-						out[x * 4 + 0] = source[x * 4 + (bgra ? 2 : 0)];
-						out[x * 4 + 1] = source[x * 4 + 1];
-						out[x * 4 + 2] = source[x * 4 + (bgra ? 0 : 2)];
-						out[x * 4 + 3] = 255;
-						lit += (source[x * 4] | source[x * 4 + 1] | source[x * 4 + 2]) > 8 ? 1 : 0;
+						// Over black a pixel is colour * alpha; over white, that plus (1 - alpha).
+						int difference = 0;
+						for (int c = 0; c < 3; ++c) {
+							difference += white[x * 4 + c] - black[x * 4 + c];
+						}
+						const int alpha = std::clamp(255 - difference / 3, 0, 255);
+						for (int c = 0; c < 3; ++c) {
+							const int channel = bgra ? 2 - c : c;
+							const int premultiplied = black[x * 4 + channel];
+							out[x * 4 + c] = alpha ? static_cast<std::uint8_t>(std::min(255, premultiplied * 255 / alpha)) : 0;
+						}
+						out[x * 4 + 3] = static_cast<std::uint8_t>(alpha);
+						lit += alpha > 8 ? 1 : 0;
 					}
 				}
 				context->Unmap(readback, 0);
+				context->Unmap(readbackWhite, 0);
 
 				if (lit == 0) {
 					// Nothing was painted: an empty picture is worse than the icon.
@@ -440,6 +469,8 @@ namespace
 						logger::warn("Thumbnail {:08X}: could not write {}", a_formID, path.string());
 					}
 				}
+			} else if (mappedBlack) {
+				context->Unmap(readback, 0);
 			}
 		} else {
 			logger::warn("Thumbnail capture: could not create {}x{} textures", rect->size, rect->size);
@@ -451,6 +482,9 @@ namespace
 		if (readback) {
 			readback->Release();
 		}
+		if (readbackWhite) {
+			readbackWhite->Release();
+		}
 		frame->Release();
 		return ok;
 	}
@@ -460,7 +494,7 @@ namespace
 		if (!current) {
 			return;
 		}
-		const auto formID = current->GetFormID();
+		const auto formID = currentID;
 		{
 			std::scoped_lock lock(stateLock);
 			(a_saved ? cached : rejected).insert(formID);
@@ -517,7 +551,7 @@ namespace
 		const auto stop = [&]() {
 			if (current) {
 				std::scoped_lock lock(stateLock);
-				queued.erase(current->GetFormID());
+				queued.erase(currentID);
 				current = nullptr;
 				working = false;
 			}
@@ -530,7 +564,7 @@ namespace
 			// The screen closed: end the session only if that is safe right now.
 			if (current) {
 				std::scoped_lock lock(stateLock);
-				queued.erase(current->GetFormID());
+				queued.erase(currentID);
 				current = nullptr;
 				working = false;
 			}
@@ -559,7 +593,13 @@ namespace
 				return;
 			}
 
-			current = RE::TESForm::LookupByID<RE::TESBoundObject>(next);
+			// A spell is pictured by the model the Magic menu shows for it.
+			if (auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(next)) {
+				current = spell->GetMenuDisplayObject();
+			} else {
+				current = RE::TESForm::LookupByID<RE::TESBoundObject>(next);
+			}
+			currentID = next;
 			if (!current || current->Is(RE::FormType::LeveledItem)) {
 				std::scoped_lock lock(stateLock);
 				rejected.insert(next);
@@ -603,7 +643,7 @@ namespace
 			if (++framesWaited > GIVE_UP_FRAMES) {
 				const auto& runtime = manager->GetRuntimeData();
 				logger::info("Thumbnail {:08X}: model did not load in {} frames (load task {}, {} model(s) held, match {}, radius {:.1f})",
-					current->GetFormID(), GIVE_UP_FRAMES, runtime.loadTask ? "pending" : "none", runtime.loadedModels.size(),
+					currentID, GIVE_UP_FRAMES, runtime.loadTask ? "pending" : "none", runtime.loadedModels.size(),
 					model ? "found" : "none", model ? model->worldBound.radius : 0.0f);
 				Finish(false);
 			}
@@ -612,7 +652,7 @@ namespace
 		if (++framesLoaded < SETTLE_FRAMES) {
 			return;
 		}
-		Finish(Capture(manager, model, current->GetFormID()));
+		Finish(Capture(manager, model, currentID));
 	}
 
 	// ---- the capture menu ----------------------------------------------------
@@ -707,10 +747,13 @@ void Thumbnails::Request(RE::TESForm* a_form)
 	if (!menuRegistered || !making || !a_form) {
 		return;
 	}
-	// Spells have no item model; leveled lists have none either. Created
-	// (0xFF...) forms get new ids per save, so a cached file would be shown for
-	// the wrong item later.
-	if (a_form->Is(RE::FormType::Spell) || a_form->Is(RE::FormType::LeveledItem) || a_form->IsDynamicForm()) {
+	// Leveled lists have no model; a spell only through its Magic menu display
+	// object. Created (0xFF...) forms get new ids per save, so a cached file
+	// would be shown for the wrong item later.
+	if (const auto* spell = a_form->As<RE::SpellItem>(); spell && !spell->GetMenuDisplayObject()) {
+		return;
+	}
+	if (a_form->Is(RE::FormType::LeveledItem) || a_form->IsDynamicForm()) {
 		return;
 	}
 	const auto       formID = a_form->GetFormID();

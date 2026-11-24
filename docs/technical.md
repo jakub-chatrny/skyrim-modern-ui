@@ -31,7 +31,8 @@ What the numbers mean (see `plugin/src/Snapshot.cpp`, `plugin/src/Equipment.cpp`
   description's `<mag>` / `<dur>` filled in and the time left.
 - `survival` is sent only with Survival Mode on, read from its `Survival_*` global variables (confirmed in game
   2026-11-22; every `Survival_` global is logged once). Survival Mode has no thirst.
-- Equip / unequip ignore which exact copy of an item is meant (tempered vs plain); spells cannot be unequipped yet.
+- Equip / unequip ignore which exact copy of an item is meant (tempered vs plain). Unequipping a spell uses the
+  game's `Actor::DeselectSpell` (what Papyrus' `UnequipSpell` does), so a spell held in both hands leaves both.
 
 
 ## Controls after loading a save
@@ -48,7 +49,8 @@ Clicking a slot asks the plugin for everything in the inventory that fits it (`l
 answer in a popup; picking a row sends `equip`, the "Nothing" row sends `unequip`.
 
 - Left hand: shields, one-handed weapons, staves, torches. Right hand: any melee weapon or staff.
-  Ranged: bows and crossbows. Spells are not listed yet.
+  Ranged: bows and crossbows. The hands also list the spells the player knows (after the items): real spells
+  only, no powers, shouts or abilities; two-handed spells (rituals) in the right hand only.
 - The list is per item type, not per copy: a tempered and a plain copy of the same item are one row.
 
 ## Item pictures
@@ -62,10 +64,12 @@ How it works:
 - While the screen is open, each item without a picture is loaded into the vanilla inventory preview
   (`Inventory3DManager`), the same one the inventory menu uses, with its lighting.
 - A small invisible menu of ours does the capture in its `PostDisplay`, the game's menu drawing pass, which is
-  where the inventory menu itself draws the preview: it clears a square of the frame to black, lets the engine
-  paint the item there, copies it out and puts the frame back, so the item never shows. The square comes from
-  the interface scene's own camera. The picture is scaled to 256 px and saved as
-  `Data/PrismaUI/views/SkyrimModernUI/thumbs/<form id>.png` (kept by `deploy.sh`).
+  where the inventory menu itself draws the preview: it clears a square of the frame, lets the engine paint the
+  item there and copies it out, once over black and once over white, then puts the frame back, so the item never
+  shows. The difference between the two gives each pixel's transparency, so the picture has a transparent
+  background. The square comes from the interface scene's own camera. The picture is scaled to 256 px and saved
+  as `Data/PrismaUI/views/SkyrimModernUI/thumbs/v2/<form id>.png` (kept by `deploy.sh`; `thumbs/` itself holds
+  the older opaque pictures, which are no longer used).
 - The preview holds at most 7 models and unloading does not free a slot, so the scene is reset at 5; it is
   never torn down while a load is in flight (the crash Grid Inventory documents).
 - The capture menu **pauses the game** while it runs (about 0.1 s per item): the engine's preview draws nothing
@@ -103,7 +107,8 @@ dark interior come out darker.
 
 Known limits: texture variants that share one model look alike; enchantment glow may be missing on the first
 capture of a model (noted by Grid Inventory); items created in game (player-enchanted) are skipped because their
-ids are not stable; spells have no item model.
+ids are not stable. Spells are pictured by the model the Magic menu shows for them (`BGSMenuDisplayObject`);
+its particle effects may not show.
 
 ## Outfits
 
@@ -127,5 +132,16 @@ hidden, so the character is shown far too close. Tried so far (2026-11-23), neit
    not come through that function. Still in `CameraStage.cpp` behind `"ignoreWalls"` (off by default).
 
 `ThirdPersonState::UpdateCameraCollision` is the function to replace, but CommonLibSSE-NG has its address
-only for SE (ID 49980), not for AE 1.6+/1.7. Next ideas: find its AE address, or hook `ThirdPersonState::Update`
-(slot 3) and write the camera node's position after it.
+only for SE (ID 49980), not for AE 1.6+/1.7.
+
+3. Current approach (`"faceOpenSpace"`, on by default): when the screen opens, check the room in front of the
+   player in 16 directions, each with six rays (a camera-wide band, centre and both sides, at chest and knee
+   height; line-of-sight collision layer). If the camera would not fit in front, turn the player to the nearest
+   direction where it does, while the screen is open; the heading is put back on close. Confirmed in game
+   2026-11-23 against flat walls; corners failed while it used one centre ray only, hence the band.
+   Where no direction has room (a tight corner), the camera comes closer and the field of view narrows by the
+   same ratio, so the character is framed about the same. Each decision is logged ("Walls: …").
+
+   Status 2026-11-24: flat walls, corners and the tree case work (with retries); a low roof edge right in front
+   of the head still pulls the camera in. Each open logs the camera's real distance at frame 6 and any retries
+   ("Walls: retry …"). Parked; the README lists it as a known issue.

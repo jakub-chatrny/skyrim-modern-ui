@@ -55,6 +55,53 @@ namespace
 		return objects->GetObject<RE::BGSEquipSlot>(
 			a_left ? RE::DEFAULT_OBJECT::kLeftHandEquip : RE::DEFAULT_OBJECT::kRightHandEquip);
 	}
+
+	bool IsTwoHanded(const RE::TESForm* a_form)
+	{
+		if (const auto* weapon = a_form->As<RE::TESObjectWEAP>()) {
+			return weapon->IsTwoHandedSword() || weapon->IsTwoHandedAxe() || weapon->IsBow() || weapon->IsCrossbow();
+		}
+		if (const auto* spell = a_form->As<RE::SpellItem>()) {
+			return spell->IsTwoHanded();
+		}
+		return false;
+	}
+
+	// Spells the player knows that can be held in this hand: real spells (not
+	// powers, shouts or abilities), cast from a hand. Two-handed spells (rituals)
+	// are offered for the right hand only.
+	std::vector<RE::SpellItem*> HandSpells(RE::PlayerCharacter* a_player, bool a_left)
+	{
+		const auto* objects = RE::BGSDefaultObjectManager::GetSingleton();
+		const auto* either = objects->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kEitherHandEquip);
+		const auto* right = HandSlot(false);
+		const auto* left = HandSlot(true);
+
+		std::vector<RE::SpellItem*> result;
+		const auto consider = [&](RE::SpellItem* a_spell) {
+			if (!a_spell || a_spell->GetSpellType() != RE::MagicSystem::SpellType::kSpell ||
+				a_spell->GetCastingType() == RE::MagicSystem::CastingType::kConstantEffect) {
+				return;
+			}
+			const auto* slot = a_spell->GetEquipSlot();
+			const bool  fits = slot == either || slot == (a_left ? left : right) ||
+			                  (!a_left && a_spell->IsTwoHanded());
+			if (fits && (!a_left || !a_spell->IsTwoHanded()) && std::ranges::find(result, a_spell) == result.end()) {
+				result.push_back(a_spell);
+			}
+		};
+		if (auto* base = a_player->GetActorBase()) {
+			if (auto* list = base->GetSpellList(); list && list->spells) {
+				for (std::uint32_t i = 0; i < list->numSpells; ++i) {
+					consider(list->spells[i]);
+				}
+			}
+		}
+		for (auto* spell : a_player->GetActorRuntimeData().addedSpells) {
+			consider(spell);
+		}
+		return result;
+	}
 }
 
 std::optional<Equipment::Slot> Equipment::SlotFromName(std::string_view a_name)
@@ -101,8 +148,9 @@ Equipment::Loadout Equipment::Read()
 		if (at(slot)) {
 			continue;  // a shield already claimed the left hand
 		}
-		// Two-handed weapons are reported for both hands; show them once.
-		if (left && form == player->GetEquippedObject(false)) {
+		// Two-handed weapons and spells are reported for both hands; show them
+		// once. The same one-handed spell (or two daggers) in each hand stays.
+		if (left && form == player->GetEquippedObject(false) && IsTwoHanded(form)) {
 			continue;
 		}
 		Item item{ form, player->GetEquippedEntryData(left), 1 };
@@ -126,8 +174,14 @@ bool Equipment::Unequip(Slot a_slot)
 	const auto  loadout = Read();
 	const auto& item = loadout[a_slot];
 	auto*       object = item ? item.form->As<RE::TESBoundObject>() : nullptr;
+	if (auto* spell = item ? item.form->As<RE::SpellItem>() : nullptr) {
+		// What Papyrus' UnequipSpell does: the spell leaves the hand(s) holding it.
+		RE::PlayerCharacter::GetSingleton()->DeselectSpell(spell);
+		logger::info("Unequip {}: spell {} ({:#010x})", SLOT_NAMES[static_cast<std::size_t>(a_slot)], spell->GetName(),
+			spell->GetFormID());
+		return true;
+	}
 	if (!object) {
-		// Empty slot, or a spell (spells are not TESBoundObjects; not handled yet).
 		logger::info("Unequip {}: nothing to unequip", SLOT_NAMES[static_cast<std::size_t>(a_slot)]);
 		return false;
 	}
@@ -251,6 +305,16 @@ Equipment::Candidates Equipment::ListFor(Slot a_slot)
 		return std::string_view(text ? text : "");
 	};
 	std::ranges::sort(result.items, [&](const Item& a_lhs, const Item& a_rhs) { return name(a_lhs) < name(a_rhs); });
+
+	// Spells for the hands, after the items.
+	if (a_slot == Slot::kLeftHand || a_slot == Slot::kRightHand) {
+		std::vector<Item> spells;
+		for (auto* spell : HandSpells(player, a_slot == Slot::kLeftHand)) {
+			spells.push_back({ spell, nullptr, 1 });
+		}
+		std::ranges::sort(spells, [&](const Item& a_lhs, const Item& a_rhs) { return name(a_lhs) < name(a_rhs); });
+		result.items.insert(result.items.end(), spells.begin(), spells.end());
+	}
 	return result;
 }
 

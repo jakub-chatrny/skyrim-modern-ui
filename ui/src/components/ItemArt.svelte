@@ -29,7 +29,7 @@
     width: 100%;
     height: 100%;
   }
-  /* Pictures are square renders on black; let them fill the frame. */
+  /* Pictures are square renders with a transparent background; the tile shows behind them. */
   .photo {
     object-fit: cover;
     border-radius: inherit;

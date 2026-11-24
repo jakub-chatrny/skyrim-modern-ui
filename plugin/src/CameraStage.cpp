@@ -53,6 +53,12 @@ namespace
 		float        pitchZoomOffset = 0.0f;
 		float        worldFOV = 0.0f;
 		float        playerPitch = 0.0f;
+		float        playerYaw = 0.0f;
+		bool         turned = false;  // the player was turned to face open space
+		RE::NiPoint3 playerPosition;  // where the player stood when the screen opened
+		int          frames = 0;      // Tick() calls since Enter (or the last retry)
+		float        distance = 0.0f; // camera distance in use
+		float        fov = 0.0f;      // field of view held while the camera is closer (0 = none)
 	};
 
 	Saved            saved;
@@ -484,7 +490,7 @@ CameraStage::Config CameraStage::LoadConfig()
 	config.blackFog = flag("blackFog", config.blackFog);
 	config.noFog = flag("noFog", config.noFog);
 	config.hideHud = flag("hideHud", config.hideHud);
-	config.ignoreWalls = flag("ignoreWalls", config.ignoreWalls);
+	config.faceOpenSpace = flag("faceOpenSpace", config.faceOpenSpace);
 	config.pauseGame = flag("pauseGame", config.pauseGame);
 	config.distance = num("distance", config.distance);
 	config.offsetX = num("offsetX", config.offsetX);
@@ -497,121 +503,122 @@ CameraStage::Config CameraStage::LoadConfig()
 
 namespace
 {
-	// Walls. The third-person camera sweeps from the player out to where it
-	// should be and stops at the first wall. With the world hidden the wall is
-	// invisible, but it still pulls the camera in, so a player standing in front
-	// of one is shown huge. (Clearing the camera's collision layer did not help.)
-	//
-	// So while the screen is open the camera's position is ours: the engine asks
-	// the third-person state for it each frame (GetTranslation), and the hook
-	// answers with a fixed offset from the player, in the camera's own frame.
-	// That offset is learned from the engine's answer whenever nothing is in the
-	// way (a wall only ever makes it shorter); until then it is estimated from
-	// the settings.
+	// Room the camera needs beyond its distance (its collision sphere and a little more).
+	constexpr float CAMERA_MARGIN = 40.0f;
+	// Closest the camera comes in a tight corner; nearer, it ends up inside the character.
+	constexpr float MIN_DISTANCE = 100.0f;
 
-	using GetTranslation_t = void (*)(RE::ThirdPersonState*, RE::NiPoint3&);
-	GetTranslation_t originalGetTranslation = nullptr;
+	// Walls. The third-person camera stops at the first wall between it and the
+	// player. The world is hidden, but its collision is still there, so a player
+	// standing in front of a wall is shown huge. Taking the camera's position over
+	// did not work (docs/technical.md), so instead the player is turned, while the
+	// screen is open, to face the most open direction: the camera sits in front
+	// of the player and then has room. The heading is put back on close.
 
-	struct WallFix
+	// How far along the segment a_from -> a_to the first solid thing is, as a
+	// fraction (1 = clear), for a ray in the given collision layer.
+	float RayFraction(RE::bhkWorld* a_world, const RE::NiPoint3& a_from, const RE::NiPoint3& a_to, RE::COL_LAYER a_layer)
 	{
-		bool         enabled = false;
-		int          frames = 0;        // since Enter
-		RE::NiPoint3 offset;            // camera frame, from the anchor
-		bool         learned = false;
-		float        configKey[3]{};    // the settings the learned offset belongs to
-		int          logged = 0;
-	} wallFix;
-
-	RE::NiPoint3 Cross(const RE::NiPoint3& a, const RE::NiPoint3& b)
-	{
-		return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x };
+		const float scale = RE::bhkWorld::GetWorldScale();
+		RE::bhkPickData pick;
+		pick.rayInput.from = RE::hkVector4(a_from * scale);
+		pick.rayInput.to = RE::hkVector4(a_to * scale);
+		pick.rayInput.filterInfo.SetCollisionLayer(a_layer);
+		{
+			RE::BSReadLockGuard lock(a_world->worldLock);
+			a_world->PickObject(pick);
+		}
+		return pick.rayOutput.HasHit() ? pick.rayOutput.hitFraction : 1.0f;
 	}
 
-	// v rotated by the unit quaternion q (inverse: conjugate q first).
-	RE::NiPoint3 Rotate(const RE::NiQuaternion& q, const RE::NiPoint3& v, bool a_inverse = false)
+	// Room for the camera in one horizontal direction, up to a_max. Twelve rays,
+	// all starting on the player's own axis (a ray that starts beside the player
+	// can start behind a wall and miss it), fanning out to a camera-wide band at
+	// knee, chest, head and just above head height (roof edges).
+	float Clearance(RE::bhkWorld* a_world, const RE::NiPoint3& a_feet, float a_yaw, float a_max)
 	{
-		const RE::NiPoint3 u{ a_inverse ? -q.x : q.x, a_inverse ? -q.y : q.y, a_inverse ? -q.z : q.z };
-		const auto         t = Cross(u, v) * 2.0f;
-		return v + t * q.w + Cross(u, t);
-	}
-
-	// The point the offset is measured from: the skeleton's third-person camera
-	// node when there is one, else a point at head height.
-	RE::NiPoint3 Anchor(RE::PlayerCharacter* a_player)
-	{
-		if (auto* root = a_player->Get3D(false)) {
-			if (auto* node = root->GetObjectByName("Camera3rd [Cam3]")) {
-				return node->world.translate;
+		const RE::NiPoint3 direction{ std::sin(a_yaw), std::cos(a_yaw), 0.0f };
+		const RE::NiPoint3 side{ direction.y, -direction.x, 0.0f };
+		constexpr float    HALF_WIDTH = 35.0f;
+		float              fraction = 1.0f;
+		for (const float height : { 40.0f, 90.0f, 130.0f, 160.0f }) {
+			const auto from = a_feet + RE::NiPoint3(0.0f, 0.0f, height);
+			for (const float across : { 0.0f, -HALF_WIDTH, HALF_WIDTH }) {
+				const auto to = from + direction * a_max + side * across;
+				// Line of sight catches walls and rocks; the camera's own layer also
+				// catches what only the camera bumps into (trees, some clutter).
+				fraction = std::min(fraction, RayFraction(a_world, from, to, RE::COL_LAYER::kLOS));
+				fraction = std::min(fraction, RayFraction(a_world, from, to, RE::COL_LAYER::kCameraSphere));
 			}
 		}
-		return a_player->GetPosition() + RE::NiPoint3(0.0f, 0.0f, 120.0f);
+		return fraction * a_max;
 	}
 
-	void HookedGetTranslation(RE::ThirdPersonState* a_state, RE::NiPoint3& a_out)
+	// Headings to try, best first, as turns from where the player faces.
+	struct Candidate
 	{
-		originalGetTranslation(a_state, a_out);
-		if (!saved.active || !wallFix.enabled) {
-			return;
-		}
-		auto* player = RE::PlayerCharacter::GetSingleton();
-		if (!player) {
-			return;
+		float turn = 0.0f;
+		float room = 0.0f;
+	};
+	std::vector<Candidate> candidates;
+	std::size_t            candidate = 0;  // the one in use
+	int                    retries = 0;
+
+	void Turn(RE::PlayerCharacter* a_player, float a_heading)
+	{
+		a_player->SetAngle(RE::NiPoint3(a_player->data.angle.x, a_player->data.angle.y, a_heading));
+	}
+
+	// Turns the player toward open space when the camera would hit something.
+	// Returns the room the camera has in the direction it ends up looking from
+	// (a_need when open). Sets a_turned when the heading changed. Keeps the other
+	// open headings in `candidates` for Tick() to fall back on.
+	float FaceOpenSpace(RE::PlayerCharacter* a_player, const CameraStage::Config& a_config, float a_need, bool& a_turned)
+	{
+		a_turned = false;
+		candidates.clear();
+		candidate = 0;
+		retries = 0;
+		auto* cell = a_player->GetParentCell();
+		auto* world = cell ? cell->GetbhkWorld() : nullptr;
+		if (!world) {
+			return a_need;
 		}
 
-		const auto anchor = Anchor(player);
-		const auto& rotation = a_state->rotation;
-		const auto  engine = Rotate(rotation, a_out - anchor, true);  // engine's offset, camera frame
-		++wallFix.frames;
+		// The camera is in front of the player, a_config.rotation off centre.
+		const float heading = a_player->data.angle.z;
+		const auto  feet = a_player->GetPosition();
+		const auto  room = [&](float a_heading) { return Clearance(world, feet, a_heading + a_config.rotation, a_need); };
 
-		// Learn once the camera has settled; only a longer offset is ever taken
-		// as "nothing in the way" once one has been learned.
-		constexpr int SETTLE_FRAMES = 10;
-		if (wallFix.frames > SETTLE_FRAMES) {
-			const float engineLength = engine.Length();
-			const float knownLength = wallFix.offset.Length();
-			if (wallFix.learned) {
-				// A wall only shortens the engine's offset; anything as long is free.
-				if (engineLength >= knownLength * 0.98f) {
-					wallFix.offset = engine;
-				}
-			} else if (engineLength >= knownLength * 0.8f) {
-				// Close enough to the estimate that nothing is in the way: take it.
-				logger::info("Wall fix: learned offset {:.1f} {:.1f} {:.1f} (estimate was {:.1f} {:.1f} {:.1f})",
-					engine.x, engine.y, engine.z, wallFix.offset.x, wallFix.offset.y, wallFix.offset.z);
-				wallFix.offset = engine;
-				wallFix.learned = true;
+		// Sixteen directions: the open ones by how little the player turns, then
+		// the rest by how much room they have.
+		constexpr int STEPS = 16;
+		for (int i = 0; i < STEPS; ++i) {
+			const float turn = (i <= STEPS / 2 ? i : i - STEPS) * (2.0f * std::numbers::pi_v<float> / STEPS);
+			candidates.push_back({ turn, room(heading + turn) });
+		}
+		const float ahead = candidates.front().room;
+		std::ranges::stable_sort(candidates, [&](const Candidate& a, const Candidate& b) {
+			const bool aOpen = a.room >= a_need;
+			const bool bOpen = b.room >= a_need;
+			if (aOpen != bOpen) {
+				return aOpen;
 			}
-		}
+			return aOpen ? std::abs(a.turn) < std::abs(b.turn) : a.room > b.room;
+		});
 
-		const auto fixed = anchor + Rotate(rotation, wallFix.offset);
-		if (wallFix.logged < 3 && wallFix.frames > SETTLE_FRAMES) {
-			++wallFix.logged;
-			logger::info("Wall fix: engine offset {:.1f} {:.1f} {:.1f} (length {:.1f}), using {:.1f} {:.1f} {:.1f}{}",
-				engine.x, engine.y, engine.z, engine.Length(), wallFix.offset.x, wallFix.offset.y, wallFix.offset.z,
-				wallFix.learned ? "" : " (estimate)");
+		// Open ahead: stay as is; the other headings remain for a retry.
+		if (ahead >= a_need) {
+			return a_need;
 		}
-		a_out = fixed;
-	}
-
-	void BeginWallFix(const CameraStage::Config& a_config)
-	{
-		if (!originalGetTranslation) {
-			// Flat (SE / AE) vtable: 0 dtor, 1 Begin, 2 End, 3 Update, 4 GetRotation, 5 GetTranslation.
-			REL::Relocation<std::uintptr_t> vtable{ RE::VTABLE_ThirdPersonState[0] };
-			originalGetTranslation =
-				reinterpret_cast<GetTranslation_t>(vtable.write_vfunc(5, reinterpret_cast<std::uintptr_t>(&HookedGetTranslation)));
-			logger::info("Wall fix: third-person camera position hooked");
+		const auto& best = candidates.front();
+		logger::info("Walls: {:.0f} units of room ahead, {:.0f} needed; turning the player {:.0f} degrees ({:.0f} room)",
+			ahead, a_need, best.turn * 180.0f / std::numbers::pi_v<float>, best.room);
+		if (best.turn != 0.0f) {
+			Turn(a_player, heading + best.turn);
+			a_turned = true;
 		}
-		const float key[3]{ a_config.distance, a_config.offsetX, a_config.offsetZ };
-		if (!std::equal(std::begin(key), std::end(key), std::begin(wallFix.configKey))) {
-			std::copy(std::begin(key), std::end(key), std::begin(wallFix.configKey));
-			wallFix.learned = false;
-			// First guess: behind the anchor at the set distance, shifted by the offsets.
-			wallFix.offset = RE::NiPoint3(a_config.offsetX, -a_config.distance, a_config.offsetZ);
-		}
-		wallFix.enabled = a_config.ignoreWalls;
-		wallFix.frames = 0;
-		wallFix.logged = 0;
+		return best.room;
 	}
 }
 
@@ -668,11 +675,34 @@ bool CameraStage::Enter(const Config& a_config)
 	settings.Set("fAutoVanityModeDelay:Camera", 10800.0f);  // no idle orbit while the screen is open
 	settings.Set("fMouseWheelZoomSpeed:Camera", 10000.0f);  // snap instead of gliding into place
 
-	BeginWallFix(a_config);
+	saved.playerYaw = player->data.angle.z;
+	saved.playerPosition = player->GetPosition();
+	saved.frames = 0;
+	// Walls: turn toward open space; where there is none (a tight corner),
+	// bring the camera closer and narrow the field of view to match, so the
+	// character is framed the same.
+	float distance = a_config.distance;
+	float fov = a_config.fov > 0.0f ? a_config.fov : saved.worldFOV;
+	if (a_config.faceOpenSpace) {
+		const float need = a_config.distance + CAMERA_MARGIN;
+		const float room = FaceOpenSpace(player, a_config, need, saved.turned);
+		if (room < need) {
+			distance = std::max(room - CAMERA_MARGIN, MIN_DISTANCE);
+			const float halfAngle = fov * std::numbers::pi_v<float> / 360.0f;
+			fov = 2.0f * std::atan(std::tan(halfAngle) * distance / a_config.distance) * 180.0f / std::numbers::pi_v<float>;
+			settings.Set("fVanityModeMinDist:Camera", distance);
+			settings.Set("fVanityModeMaxDist:Camera", distance);
+			camera->GetRuntimeData2().worldFOV = fov;
+			logger::info("Walls: no open side; camera at {:.0f} instead of {:.0f}, field of view {:.1f}", distance,
+				a_config.distance, fov);
+		}
+	}
+	saved.distance = distance;
+	saved.fov = distance < a_config.distance ? fov : 0.0f;
 	third->pitchZoomOffset = 0.1f;  // distance independent of pitch
 	third->posOffsetExpected = third->posOffsetActual = RE::NiPoint3(a_config.offsetX, 0.0f, a_config.offsetZ);
 
-	if (a_config.fov > 0.0f) {
+	if (a_config.fov > 0.0f && distance == a_config.distance) {
 		camera->GetRuntimeData2().worldFOV = a_config.fov;
 	}
 
@@ -700,8 +730,6 @@ void CameraStage::Leave()
 	}
 	saved.active = false;
 
-	// Before the camera's last update below, so the game's own position (walls included) is back.
-	wallFix.enabled = false;
 	DetachBackdrop();
 	ShowWorld();
 	SetHudHidden(false);
@@ -715,6 +743,15 @@ void CameraStage::Leave()
 	}
 
 	player->data.angle.x = saved.playerPitch;
+	if (saved.turned) {
+		player->SetAngle(RE::NiPoint3(player->data.angle.x, player->data.angle.y, saved.playerYaw));
+	}
+	// Turning the player near a wall nudged them a little each time; put them
+	// back where they stood (only small moves, never a teleport after a scripted move).
+	if (const float moved = player->GetPosition().GetDistance(saved.playerPosition); moved > 0.5f && moved < 200.0f) {
+		player->SetPosition(saved.playerPosition, true);
+		logger::info("Camera stage: player had moved {:.1f} units; put back", moved);
+	}
 	third->toggleAnimCam = saved.toggleAnimCam;
 	third->freeRotationEnabled = saved.freeRotationEnabled;
 	third->freeRotation = saved.freeRotation;
@@ -735,7 +772,46 @@ void CameraStage::Leave()
 
 void CameraStage::Tick()
 {
-	if (!saved.active || !worldHidden) {
+	if (!saved.active) {
+		return;
+	}
+	if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+		++saved.frames;
+		// A wall the checks missed still pulls the camera in. Look where the
+		// camera really is a few frames after opening (or after a retry); if it
+		// is far too close, turn the player to the next open heading.
+		constexpr int CHECK_FRAME = 6;
+		constexpr int MAX_RETRIES = 4;
+		auto* camera = RE::PlayerCamera::GetSingleton();
+		// The game may set the field of view back; hold the narrower one while
+		// the camera stands closer than usual.
+		if (camera && saved.fov > 0.0f) {
+			camera->GetRuntimeData2().worldFOV = saved.fov;
+		}
+		if (saved.frames == CHECK_FRAME || saved.frames == 120) {
+			if (camera && camera->cameraRoot) {
+				const auto  head = saved.playerPosition + RE::NiPoint3(0.0f, 0.0f, 120.0f);
+				const float distance = camera->cameraRoot->world.translate.GetDistance(head);
+				const bool  pulledIn = distance < saved.distance * 0.6f;
+				logger::info("Camera stage: frame {}, camera {:.0f} units from the player's head{}, field of view {:.1f}", saved.frames,
+					distance, pulledIn ? " (pulled in)" : "", camera->GetRuntimeData2().worldFOV);
+				const auto next = candidate + 1;
+				// Any heading left: the checks can miss what the camera hits, so a
+				// heading they rate as blocked may still work.
+				const bool nextOpen = next < candidates.size();
+				if (pulledIn && saved.frames == CHECK_FRAME && retries < MAX_RETRIES && nextOpen) {
+					++retries;
+					candidate = next;
+					Turn(player, saved.playerYaw + candidates[candidate].turn);
+					saved.turned = true;
+					saved.frames = 0;
+					logger::info("Walls: retry {}: turning the player {:.0f} degrees instead", retries,
+						candidates[candidate].turn * 180.0f / std::numbers::pi_v<float>);
+				}
+			}
+		}
+	}
+	if (!worldHidden) {
 		return;
 	}
 	// Critters, NPCs and effects keep being attached while the game runs.

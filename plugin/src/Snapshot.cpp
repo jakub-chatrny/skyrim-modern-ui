@@ -164,8 +164,10 @@ namespace
 		return a_of > 0.0f ? std::clamp(a_value / a_of, 0.0f, 1.0f) : 0.0f;
 	}
 
+	RE::TESGlobal* FindGlobal(std::string_view a_editorID);
+
 	// "Restore <mag> points of Health for <dur> seconds." -> numbers filled in,
-	// any other <tag> dropped.
+	// <Global=Name> replaced by that global's value, any other <tag> dropped.
 	std::string FillDescription(std::string_view a_template, float a_magnitude, float a_duration)
 	{
 		std::string out;
@@ -185,6 +187,10 @@ namespace
 				out += Number(a_magnitude);
 			} else if (tag == "dur") {
 				out += Number(a_duration);
+			} else if (tag.starts_with("Global=")) {
+				if (auto* global = FindGlobal(tag.substr(7))) {
+					out += Number(global->value);
+				}
 			}
 			i = end + 1;
 		}
@@ -228,6 +234,9 @@ namespace
 			if (found != bySpell.end() && spell) {
 				// Same spell, another effect: keep the first description, the longest time.
 				auto& row = rows[found->second];
+				if (row.description.empty()) {
+					row.description = FillDescription(base->magicItemDescription.c_str(), effect->magnitude, effect->duration);
+				}
 				if (remaining > row.remaining) {
 					row.remaining = remaining;
 				}
@@ -242,6 +251,15 @@ namespace
 				continue;
 			}
 			row.description = FillDescription(base->magicItemDescription.c_str(), effect->magnitude, effect->duration);
+			// Abilities (standing stones, Survival's needs, blessings) keep their
+			// text on the spell, not on the effect, as the Magic menu shows it.
+			if (row.description.empty()) {
+				if (const auto* withText = spell ? spell->As<RE::TESDescription>() : nullptr) {
+					RE::BSString text;
+					const_cast<RE::TESDescription*>(withText)->GetDescription(text, const_cast<RE::MagicItem*>(spell));
+					row.description = FillDescription(text.c_str(), effect->magnitude, effect->duration);
+				}
+			}
 			row.remaining = remaining;
 			row.positive = !base->IsDetrimental();
 			if (spell && spell->IsFood()) {

@@ -14,7 +14,7 @@ Magic, Inventory, Skills) are placeholders.
 
 - The player's character, alive and animated, on a black background behind the UI.
 - Twelve equipment slots. Click a slot (or select it and press Enter) to pick from everything in the inventory
-  that fits; the "Nothing" row takes the item off.
+  that fits, and for the hands the spells the player knows; the "Nothing" row takes the item off.
 - Item pictures, made in game from the items' 3D models the first time the screen opens.
 - Four outfits per save game. Switching stores what is worn and puts on the other set.
 - Active effects with time left; condition (sleep, hunger, warmth) with Survival Mode on; health, magicka,
@@ -50,8 +50,9 @@ Prisma UI: `protontricks 489830 vcrun2022`.
 
 ### Known issues
 
-- **Standing close to a wall zooms in.** The game's camera stops at the wall behind you even though the wall
-  is hidden, so the character fills the screen. Step away from the wall before opening the screen.
+- **Low roofs can still zoom in.** Near walls and in corners the screen turns the character toward open space
+  (or brings the camera closer), but under a low roof edge the game's camera can still end up right at the
+  character. Step out from under it before opening the screen.
 - **No gamepad support yet.** Keyboard and mouse only.
 - **Only the Character tab exists.** The other tabs in the top bar do nothing.
 

@@ -139,7 +139,14 @@ namespace
 				} else {
 					Equipment::Unequip(*slot);
 				}
-				// The fresh snapshot follows from the game's equip event.
+				// Items: the fresh snapshot follows from the game's equip event.
+				// Spells fire none when they leave a hand, so answer on the next
+				// task run, once the change has been applied.
+				SKSE::GetTaskInterface()->AddTask([]() {
+					if (isOpen) {
+						PushSnapshot();
+					}
+				});
 			} else if (type == "equip") {
 				// formId arrives as "0x0001397E".
 				const auto id = command.value("formId", "");

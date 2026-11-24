@@ -174,6 +174,7 @@
     margin-right: 12px;
     border-radius: 8px;
     overflow: hidden;
+    background: var(--tile-bg);
   }
   .art img {
     display: block;
