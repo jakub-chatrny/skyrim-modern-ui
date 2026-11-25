@@ -294,7 +294,7 @@
       </section>
     </main>
 
-    <!-- The design's "esc Close": the screen is closed with F4 only, Esc stays the game's. -->
+    <!-- The design's "esc Close": the screen is closed with its own key (Tab by default), Esc stays the game's. -->
     <footer>
       {#if selected && useLabel(selected)}<Hotkey key="enter" action={useLabel(selected) ?? ''} />{/if}
       {#if drawing3D}
@@ -305,7 +305,7 @@
         <Hotkey key="R" action="Drop" />
         <Hotkey key="F" action="Favourite" />
       {/if}
-      <Hotkey key="F4" action="Close" />
+      <Hotkey key={snapshot.toggleKey ?? 'F4'} action="Close" />
     </footer>
   </div>
 </div>

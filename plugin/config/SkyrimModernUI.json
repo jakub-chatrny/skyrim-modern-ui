@@ -1,4 +1,5 @@
 {
+  "toggleKey": "Tab",
   "camera": {
     "enabled": true,
     "hideWorld": true,

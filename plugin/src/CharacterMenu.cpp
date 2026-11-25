@@ -2,6 +2,9 @@
 
 #include "CharacterMenu.h"
 
+#include <fstream>
+#include <numbers>
+
 #include "CameraStage.h"
 #include "Equipment.h"
 #include "Outfits.h"
@@ -13,15 +16,105 @@ namespace
 {
 	// Path relative to Data/PrismaUI/views/. scripts/deploy.sh copies ui/dist there.
 	constexpr auto VIEW_PATH = "SkyrimModernUI/index.html";
-	// DirectInput scan code. 0x3E = F4. (The Prisma example plugin uses F3.)
-	constexpr std::uint32_t TOGGLE_KEY = 0x3E;
+	// The key that opens and closes the screen: "toggleKey" in the settings
+	// file, Tab by default. Whatever the game had on that key during play
+	// (Tab: its own menu) moves to F4, the screen's key before.
+	constexpr auto          CONFIG_PATH = "Data/SKSE/Plugins/SkyrimModernUI.json";
+	constexpr std::uint32_t KEY_F4 = 0x3E;  // DirectInput scan codes
+	std::uint32_t           toggleKey = 0x0F;
+	std::string             toggleKeyName = "Tab";
+
+	// Names the settings file may use; a plain number is a scan code.
+	constexpr std::pair<std::string_view, std::uint32_t> KEY_NAMES[] = {
+		{ "Tab", 0x0F }, { "F1", 0x3B }, { "F2", 0x3C }, { "F3", 0x3D }, { "F4", 0x3E }, { "F5", 0x3F }, { "F6", 0x40 },
+		{ "F7", 0x41 }, { "F8", 0x42 }, { "F9", 0x43 }, { "F10", 0x44 }, { "F11", 0x57 }, { "F12", 0x58 },
+		{ "Insert", 0xD2 }, { "Home", 0xC7 }, { "End", 0xCF }, { "PageUp", 0xC9 }, { "PageDown", 0xD1 },
+		{ "Backspace", 0x0E }, { "J", 0x24 }, { "K", 0x25 }, { "L", 0x26 }, { "U", 0x16 }, { "I", 0x17 }, { "O", 0x18 },
+		{ "P", 0x19 }, { "N", 0x31 }, { "M", 0x32 },
+	};
+
+	void ReadToggleKey()
+	{
+		std::ifstream file(CONFIG_PATH);
+		const auto    json = file ? nlohmann::json::parse(file, nullptr, false) : nlohmann::json();
+		const auto    it = json.is_object() ? json.find("toggleKey") : json.end();
+		if (!json.is_object() || it == json.end()) {
+			return;  // default
+		}
+		if (it->is_number_unsigned() && it->get<std::uint32_t>() > 0 && it->get<std::uint32_t>() < 256) {
+			toggleKey = it->get<std::uint32_t>();
+			toggleKeyName = std::format("Key {:#x}", toggleKey);
+			for (const auto& [name, code] : KEY_NAMES) {
+				if (code == toggleKey) {
+					toggleKeyName = name;
+				}
+			}
+			return;
+		}
+		if (it->is_string()) {
+			const auto wanted = it->get<std::string>();
+			for (const auto& [name, code] : KEY_NAMES) {
+				if (_stricmp(std::string(name).c_str(), wanted.c_str()) == 0) {
+					toggleKey = code;
+					toggleKeyName = name;
+					return;
+				}
+			}
+		}
+		logger::warn("toggleKey {} in {} is not a key this plugin knows; using {}", it->dump(), CONFIG_PATH, toggleKeyName);
+	}
+
+	// Moves what the game does with the toggle key during play to F4, in the
+	// game's key map in memory (as if controlmap.txt said so). Menus keep the
+	// key (Tab still goes back in the game's menus). Safe to repeat.
+	//
+	// The game finds a key's event by binary search in a list sorted by key
+	// (CommonLib's ControlMap::GetUserEventName mirrors it), so the list is
+	// sorted again after the change, and F4 is used only while it is free:
+	// two events on one key would leave both unfound.
+	void FreeToggleKey()
+	{
+		constexpr std::uint16_t UNBOUND = 0xFF;  // what the game uses for "no key"
+		if (toggleKey == KEY_F4) {
+			return;
+		}
+		auto* controls = RE::ControlMap::GetSingleton();
+		auto* gameplay = controls ? controls->controlMap[RE::ControlMap::InputContextID::kGameplay] : nullptr;
+		if (!gameplay) {
+			logger::warn("Key map not available; {} keeps its game binding too", toggleKeyName);
+			return;
+		}
+		auto&      mappings = gameplay->deviceMappings[RE::INPUT_DEVICE::kKeyboard];
+		const bool f4Taken = std::ranges::any_of(mappings, [](const auto& a_mapping) { return a_mapping.inputKey == KEY_F4; });
+		bool       moved = false;
+		for (auto& mapping : mappings) {
+			if (mapping.inputKey != toggleKey) {
+				continue;
+			}
+			// Only one event can take F4; any further one is unbound.
+			if (!f4Taken && !moved) {
+				mapping.inputKey = static_cast<std::uint16_t>(KEY_F4);
+				logger::info("Key map: \"{}\" moved from {} to F4", mapping.eventID.c_str(), toggleKeyName);
+			} else {
+				mapping.inputKey = UNBOUND;
+				logger::warn("Key map: \"{}\" unbound from {} (F4 is taken)", mapping.eventID.c_str(), toggleKeyName);
+			}
+			moved = true;
+		}
+		if (moved) {
+			std::stable_sort(mappings.begin(), mappings.end(),
+				[](const auto& a_lhs, const auto& a_rhs) { return a_lhs.inputKey < a_rhs.inputKey; });
+		}
+	}
 
 	PRISMA_UI_API::IVPrismaUI1* prisma = nullptr;
 	PrismaView                  view = 0;
 
 	void PushSnapshot()
 	{
-		const auto snapshot = Snapshot::Build().dump();
+		auto json = Snapshot::Build();
+		json["toggleKey"] = toggleKeyName;
+		const auto snapshot = json.dump();
 		logger::debug("Snapshot: {}", snapshot);
 		// dump() again: turns the JSON text into a JS string literal.
 		const auto payload = nlohmann::json(snapshot).dump();
@@ -206,6 +299,8 @@ namespace
 				const auto rect = command.value("rect", nlohmann::json::object());
 				Thumbnails::SetPreview(formID, rect.value("left", 0.0f), rect.value("top", 0.0f), rect.value("width", 0.0f),
 					rect.value("height", 0.0f));
+			} else if (type == "turnCharacter") {
+				CameraStage::TurnCharacter(command.value("degrees", 0.0f) * std::numbers::pi_v<float> / 180.0f);
 			} else if (type == "turn") {
 				Thumbnails::TurnPreview(command.value("degrees", 0.0f));
 			} else if (type == "listInventory") {
@@ -284,7 +379,7 @@ namespace
 				if (!button || button->GetDevice() != RE::INPUT_DEVICE::kKeyboard) {
 					continue;
 				}
-				if (button->GetIDCode() != TOGGLE_KEY) {
+				if (button->GetIDCode() != toggleKey) {
 					ForwardKey(*button);
 					continue;
 				}
@@ -356,6 +451,7 @@ void CharacterMenu::Prewarm()
 	// The first open after starting the game froze for about two seconds
 	// before the page showed: the page had never been built. Give it the
 	// player's data now, while it is hidden, so it builds then.
+	FreeToggleKey();  // again: loading may have read the key map anew
 	if (prisma && !isOpen) {
 		logger::info("Prewarm: page built ahead of the first open");
 		PushSnapshot();
@@ -364,6 +460,8 @@ void CharacterMenu::Prewarm()
 
 void CharacterMenu::Install()
 {
+	ReadToggleKey();
+	FreeToggleKey();
 	prisma = PRISMA_UI_API::RequestPluginAPI<PRISMA_UI_API::IVPrismaUI1>();
 	if (!prisma) {
 		logger::error("PrismaUI.dll not found or too old; the Character screen is disabled");
@@ -402,5 +500,5 @@ void CharacterMenu::Install()
 	static EquipSink equipSink;
 	RE::ScriptEventSourceHolder::GetSingleton()->AddEventSink<RE::TESEquipEvent>(&equipSink);
 
-	logger::info("Character screen installed, toggle key scan code {:#x}", TOGGLE_KEY);
+	logger::info("Character screen installed, toggle key {} (scan code {:#x})", toggleKeyName, toggleKey);
 }

@@ -125,6 +125,8 @@ export interface Snapshot {
   effects?: ActiveEffect[]
   /** Items queued to drop when the screen closes, one form id per copy. */
   dropping?: string[]
+  /** The key that opens and closes the screen ("toggleKey" in the settings); older plugins: F4. */
+  toggleKey?: string
 }
 
 /** Inventory tab categories, in the order of the design's submenu. */
@@ -183,6 +185,8 @@ export type Command =
     }
   /** Turn the 3D preview about its vertical axis. */
   | { type: 'turn'; degrees: number }
+  /** Turn the character in place on the Character tab; the camera stays. */
+  | { type: 'turnCharacter'; degrees: number }
 
 export interface Bridge {
   /** True when no game is attached and data comes from the fixture. */

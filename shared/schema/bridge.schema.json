@@ -300,6 +300,10 @@
             "type": "string"
           },
           "description": "Form ids of items queued to be dropped when the screen closes, one entry per copy."
+        },
+        "toggleKey": {
+          "type": "string",
+          "description": "The key that opens and closes the screen, as named in the settings (\"Tab\", \"F4\", ...)."
         }
       }
     },
@@ -546,6 +550,87 @@
             "type": {
               "const": "listInventory",
               "description": "Ask for everything the player carries; answered with window.smuiInventory(Inventory)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "open"
+          ],
+          "properties": {
+            "type": {
+              "const": "preview",
+              "description": "The Inventory tab: open hides the character; formId is shown in 3D in rect (fractions of the window)."
+            },
+            "open": {
+              "type": "boolean"
+            },
+            "formId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rect": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "top",
+                "width",
+                "height"
+              ],
+              "properties": {
+                "left": {
+                  "type": "number"
+                },
+                "top": {
+                  "type": "number"
+                },
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "degrees"
+          ],
+          "properties": {
+            "type": {
+              "const": "turn",
+              "description": "Turn the Inventory tab's 3D preview, degrees."
+            },
+            "degrees": {
+              "type": "number"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "degrees"
+          ],
+          "properties": {
+            "type": {
+              "const": "turnCharacter",
+              "description": "Turn the character in place on the Character tab, degrees; the camera stays."
+            },
+            "degrees": {
+              "type": "number"
             }
           }
         }

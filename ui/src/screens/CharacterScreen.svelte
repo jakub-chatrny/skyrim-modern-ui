@@ -192,6 +192,8 @@
             // row: on a tile they go round the arch instead.
             w: () => stepTile(-1),
             s: () => stepTile(1),
+            z: () => turnCharacter(-30),
+            c: () => turnCharacter(30),
 
             '1': () => onOutfit(0),
             '2': () => onOutfit(1),
@@ -246,13 +248,30 @@
     onOutfit((snapshot.outfits.active + step + count) % count)
   }
 
+  // Turning the character: drag across the stage, or Z / C. The plugin turns
+  // the character in place; the camera, lights and backdrop stay.
+  let dragX: number | null = null
+  function onStageDown(event: MouseEvent) {
+    dragX = event.clientX
+  }
+  function onDragMove(event: MouseEvent) {
+    if (dragX === null) return
+    const step = (event.clientX - dragX) / scale
+    dragX = event.clientX
+    if (step) bridge.send({ type: 'turnCharacter', degrees: step * 0.5 })
+  }
+  function turnCharacter(degrees: number) {
+    bridge.send({ type: 'turnCharacter', degrees })
+    return true
+  }
+
   // The plugin owns the outfits; the highlight follows the snapshot it sends back.
   function onOutfit(index: number) {
     bridge.send({ type: 'switchOutfit', index })
   }
 </script>
 
-<svelte:window onresize={onResize} />
+<svelte:window onresize={onResize} onmousemove={onDragMove} onmouseup={() => (dragX = null)} />
 
 <!-- In a browser there is no game behind the page; paint the black the game provides. -->
 <div class="viewport" class:mock>
@@ -296,7 +315,8 @@
             {/each}
           </div>
 
-          <div class="stage">
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="stage" onmousedown={onStageDown}>
             {#if mock}<span>character renders here (mock data)</span>{/if}
             {#if snapshot.picturesPending > 0}
               <!-- The game is showing items here, one after another, to picture them. -->
@@ -321,7 +341,7 @@
       <RightPanel {snapshot} />
     </main>
 
-    <!-- The design's "esc Close": the screen is closed with F4 only, Esc stays the game's. -->
+    <!-- The design's "esc Close": the screen is closed with its own key (Tab by default), Esc stays the game's. -->
     <footer>
       <div class="details">
         {#if focusedSlot}
@@ -339,6 +359,8 @@
           {#if focusedItem?.enchantment}<p class="details-enchantment">{focusedItem.enchantment}</p>{/if}
         {/if}
       </div>
+      <Hotkey key="Z" />
+      <Hotkey key="C" action="Turn" />
       <Hotkey key="enter" action="Equip" />
       {#if focusedItem}
         <Hotkey key="X" action="Unequip" />
@@ -347,7 +369,7 @@
           <Hotkey key="F" action="Favourite" />
         {/if}
       {/if}
-      <Hotkey key="F4" action="Close" />
+      <Hotkey key={snapshot.toggleKey ?? 'F4'} action="Close" />
     </footer>
 
     {#if picker}

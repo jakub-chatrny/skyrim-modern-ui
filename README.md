@@ -33,11 +33,15 @@ Install with a mod manager (Mod Organizer 2 or Vortex), in this order:
 4. This mod: the `SkyrimModernUI-<version>.zip` from
    [Releases](https://github.com/jakub-chatrny/skyrim-modern-ui/releases).
 
-Start the game through SKSE, load a save, press **F4**.
+Start the game through SKSE, load a save, press **Tab**. The game's own Tab menu (Skills, Items, Magic, Map)
+moves to **F4**. To use another key, set `"toggleKey"` in `Data/SKSE/Plugins/SkyrimModernUI.json` (`"Tab"`,
+`"F1"` to `"F12"`, `"Insert"`, `"Home"`, `"End"`, `"PageUp"`, `"PageDown"`, some letters, or a DirectInput scan
+code); whatever the game did with that key during play moves to F4.
 
 | Key | Does |
 |---|---|
-| F4 | Open and close the screen (Esc is left to the game) |
+| Tab | Open and close the screen (Esc is left to the game) |
+| F4 | The game's own Tab menu |
 | Q / E | Switch between the Character and Inventory tabs |
 | W / S, arrow keys, mouse | Move the selection (on Character, W / S go round the twelve tiles) |
 | R | Drop the selected item (a tile, a grid item, or the highlighted row of an item list) |
@@ -51,6 +55,7 @@ Character tab:
 | A / D | Previous / next outfit |
 | 1 – 4 | Outfit 1 to 4 |
 | X | Take off the selected tile's item |
+| Drag on the character, Z / C | Turn the character |
 
 Inventory tab:
 
@@ -58,6 +63,7 @@ Inventory tab:
 |---|---|
 | A / D | Previous / next category (All, Weapons, Armor, Potions, Food, Ingredients, Books, Misc) |
 | Enter, click | Equip or take off gear; drink, eat or use potions, food and ingredients |
+| Drag on the item, Z / C | Turn the 3D item |
 | Sort buttons (mouse) | Sort by name, type, weight, value or value per weight; click again to reverse |
 
 Camera framing and other settings are in `Data/SKSE/Plugins/SkyrimModernUI.json`; it is read every time the
@@ -116,7 +122,7 @@ Where to find things:
   Barlow Condensed stand in; the real fonts are used if they are installed. Alegreya and Inter are bundled.
 - **Background.** The file's background is a very dark blue (#070b10); in game the background is the black
   behind the character.
-- **Close hint.** The file says "esc Close"; the screen closes with F4, so the hint says F4.
+- **Close hint.** The file says "esc Close"; the screen closes with its own key (Tab by default), so the hint names that key.
 - **Damage.** The file shows ranges (38–46); the game has one number per weapon. "Magic" is the Destruction
   power bonus until there is a better definition.
 - **Skills.** The level is shown, muted, after each name. The tab opens on the tree with the most levels.

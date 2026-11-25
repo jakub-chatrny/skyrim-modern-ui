@@ -60,4 +60,8 @@ namespace CameraStage
 	// Inventory tab: the character is hidden (the item preview is drawn where
 	// the page shows the item). Undone by Leave() as well.
 	void SetCharacterHidden(bool a_hidden);
+
+	// Turns the character in place (dragging on the Character tab); the camera,
+	// the backdrop and the lights stay. Undone by Leave().
+	void TurnCharacter(float a_radians);
 }

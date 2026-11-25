@@ -47,8 +47,8 @@
     tab = next
   }
 
-  // No key handling here on purpose: opening and closing is the plugin's F4
-  // hotkey only. Esc is left alone for now.
+  // No key handling here on purpose: opening and closing is the plugin's
+  // toggle key only (Tab by default). Esc is left alone for now.
 </script>
 
 {#if snapshot}

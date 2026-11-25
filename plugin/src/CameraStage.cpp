@@ -534,6 +534,47 @@ namespace
 		}
 	}
 
+	// Turning the character (drag on the Character tab). The camera keeps its
+	// place, and so do the backdrop and lights hung on the player: each frame
+	// they get the turn taken back out, measured on the player's root node
+	// itself, so no sign convention has to be guessed.
+	bool                                                       turnActive = false;
+	RE::NiMatrix3                                              turnReference;  // root's world rotation before the first turn
+	std::vector<std::pair<RE::NiPointer<RE::NiAVObject>, RE::NiTransform>> turnChildren;  // their poses then
+
+	// Turns asked for and not yet made: applied a few degrees per frame, so a
+	// Z / C step glides instead of jumping.
+	float pendingTurn = 0.0f;
+	constexpr float TURN_STEP = 0.07f;  // radians per frame, about 4 degrees
+
+	void ApplyTurn(float a_radians);  // below CameraStage::TurnCharacter
+
+	void ResetTurn()
+	{
+		pendingTurn = 0.0f;
+		for (auto& [object, pose] : turnChildren) {
+			object->local = pose;
+		}
+		turnChildren.clear();
+		turnActive = false;
+	}
+
+	void HoldChildrenAgainstTurn()
+	{
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		auto* root = player ? player->Get3D(false) : nullptr;
+		if (!turnActive || !root) {
+			return;
+		}
+		const auto undo = root->world.rotate.Transpose() * turnReference;
+		for (auto& [object, pose] : turnChildren) {
+			object->local.translate = undo * pose.translate;
+			object->local.rotate = undo * pose.rotate;
+		}
+	}
+
+	RE::ThirdPersonState* ThirdPerson(RE::PlayerCamera* a_camera);
+
 	RE::ThirdPersonState* ThirdPerson(RE::PlayerCamera* a_camera)
 	{
 		return static_cast<RE::ThirdPersonState*>(
@@ -820,6 +861,7 @@ void CameraStage::Leave()
 		return;
 	}
 	SetCharacterHidden(false);
+	ResetTurn();
 	saved.active = false;
 
 	DetachBackdrop();
@@ -910,6 +952,7 @@ void CameraStage::Tick()
 				if (pulledIn && saved.frames == CHECK_FRAME && retries < MAX_RETRIES && nextOpen) {
 					++retries;
 					candidate = next;
+					ResetTurn();
 					Turn(player, saved.playerYaw + candidates[candidate].turn);
 					saved.turned = true;
 					saved.frames = 0;
@@ -919,6 +962,12 @@ void CameraStage::Tick()
 			}
 		}
 	}
+	if (pendingTurn != 0.0f) {
+		const float step = std::clamp(pendingTurn, -TURN_STEP, TURN_STEP);
+		pendingTurn = std::abs(pendingTurn - step) < 1e-4f ? 0.0f : pendingTurn - step;
+		ApplyTurn(step);
+	}
+	HoldChildrenAgainstTurn();
 	if (!worldHidden) {
 		return;
 	}
@@ -953,4 +1002,46 @@ void CameraStage::SetCharacterHidden(bool a_hidden)
 		hiddenParts.clear();
 	}
 	logger::info("Camera stage: character {}", characterHidden ? "hidden" : "shown");
+}
+
+void CameraStage::TurnCharacter(float a_radians)
+{
+	if (saved.active && std::isfinite(a_radians)) {
+		pendingTurn += a_radians;
+	}
+}
+
+namespace
+{
+	// One step of a turn, all in this frame: the character's heading, its 3D
+	// node (the game would only copy the heading there next frame, and that
+	// frame showed the lights and backdrop turned with it: a flash), the
+	// lights and backdrop taken back, and the camera kept in place.
+	void ApplyTurn(float a_radians)
+	{
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		auto* camera = RE::PlayerCamera::GetSingleton();
+		auto* third = camera ? ThirdPerson(camera) : nullptr;
+		auto* root = player ? player->Get3D(false) : nullptr;
+		if (!player || !third || !root) {
+			return;
+		}
+		if (!turnActive) {
+			turnReference = root->world.rotate;
+			for (auto& plane : backdropPlanes) {
+				turnChildren.emplace_back(plane.get(), plane->local);
+			}
+			for (auto& light : studioLights) {
+				turnChildren.emplace_back(light.get(), light->local);
+			}
+			turnActive = true;
+		}
+		player->SetAngle(RE::NiPoint3(player->data.angle.x, player->data.angle.y, player->data.angle.z + a_radians));
+		player->Update3DPosition(false);
+		HoldChildrenAgainstTurn();
+		RE::NiUpdateData update{};
+		root->Update(update);
+		third->freeRotation.x -= a_radians;  // the camera stays where it is
+		saved.turned = true;                 // Leave() turns the player back
+	}
 }
