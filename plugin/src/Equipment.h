@@ -86,4 +86,8 @@ namespace Equipment
 	[[nodiscard]] std::vector<RE::FormID> QueuedDrops();
 	// Marks the item as a favourite in the game's inventory, or clears the mark.
 	bool ToggleFavorite(RE::FormID a_formID);
+
+	// The Inventory tab's Enter: worn gear comes off, other gear goes on,
+	// potions, food and ingredients are consumed. Books and the rest: nothing.
+	bool Use(RE::FormID a_formID);
 }

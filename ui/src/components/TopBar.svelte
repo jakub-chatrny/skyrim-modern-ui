@@ -1,25 +1,39 @@
+<script module lang="ts">
+  export type MainTab = 'Character' | 'Inventory'
+</script>
+
 <script lang="ts">
-  // Figma node 2007:3648 "Menu" (Character / Iter 4): a 3 x 2 grid. Row 1:
-  // name, Q / tabs / E, counters. Row 2: level + XP bar, A / outfits / D.
-  // The hotkeys themselves are handled in CharacterScreen.svelte.
-  import coinA from '../assets/design/icon-coin-a.svg'
-  import coinB from '../assets/design/icon-coin-b.svg'
-  import dragonHead from '../assets/design/icon-dragon-head.svg'
-  import weight from '../assets/design/icon-weight.svg'
+  // Figma "Menu" as in Inventory / Iter 3, shared by every tab: a 3 x 2 grid.
+  // Row 1: name, Q / tabs / E, counters (dragon souls, gold, carry weight).
+  // Row 2: level + XP bar, A / submenu / D. Each screen passes its own
+  // submenu (outfits, item categories). Hotkeys are handled by the screens.
+  import type { Snippet } from 'svelte'
+  import dragonHead from '../assets/design/inventory/dragon-head.svg'
+  import weightIcon from '../assets/design/inventory/stat-weight.svg'
   import type { Snapshot } from '../bridge/types'
   import Hotkey from './Hotkey.svelte'
+  import StatPill from './StatPill.svelte'
 
   let {
     player,
-    outfits,
-    onoutfit,
-  }: { player: Snapshot['player']; outfits: Snapshot['outfits']; onoutfit: (index: number) => void } = $props()
+    active,
+    ontab,
+    submenu,
+  }: {
+    player: Snapshot['player']
+    active: MainTab
+    ontab?: (tab: MainTab) => void
+    submenu: Snippet
+  } = $props()
 
-  // Only Character exists in the first version; the other tabs are inert.
-  const tabs = ['Map', 'Quests', 'Character', 'Magic', 'Inventory', 'Skills']
+  const carry = $derived(player.carryWeight)
+  const carryFraction = $derived(carry.max > 0 ? Math.max(0, Math.min(1, carry.current / carry.max)) : 0)
 
-  // 13848 -> "13 848", as in the design.
-  const grouped = (value: number) => String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  // Order from the Inventory design. Only Character and Inventory exist yet;
+  // the other tabs are inert.
+  const tabs = ['Map', 'Quests', 'Character', 'Inventory', 'Magic', 'Skills']
+  const working = (tab: string): tab is MainTab => tab === 'Character' || tab === 'Inventory'
+
 </script>
 
 <header class="menu">
@@ -29,28 +43,35 @@
     <Hotkey key="Q" />
     <div class="items">
       {#each tabs as tab}
-        <span class="tab" class:active={tab === 'Character'}>{tab}</span>
+        <span
+          class="tab"
+          class:active={tab === active}
+          role="button"
+          tabindex="-1"
+          onclick={() => working(tab) && ontab?.(tab)}
+          onkeydown={() => {}}
+        >
+          {tab}
+        </span>
       {/each}
     </div>
     <Hotkey key="E" />
   </nav>
 
   <div class="counters">
-    <div class="counter">
-      <img alt="Dragon souls" src={dragonHead} width="24" height="24" />
-      <p>{player.dragonSouls}</p>
-    </div>
-    <div class="counter">
-      <img alt="Carry weight" src={weight} width="28" height="28" />
-      <p>{Math.round(player.carryWeight.current)}/{Math.round(player.carryWeight.max)}</p>
-    </div>
-    <div class="counter">
-      <span class="coin" aria-label="Gold">
-        <img alt="" class="coin-a" src={coinA} />
-        <img alt="" class="coin-b" src={coinB} />
+    <span class="counter">
+      <img alt="Dragon souls" src={dragonHead} width="20" height="20" />
+      <span class="souls">{player.dragonSouls}</span>
+    </span>
+    <StatPill kind="value" text={String(player.gold)} variant="counter" />
+    <span class="carry">
+      <span class="carry-label">
+        <span class="carry-icon"><img alt="" src={weightIcon} /></span>
+        Carry weight
       </span>
-      <p>{grouped(player.gold)}</p>
-    </div>
+      <span class="carry-bar"><span class="carry-fill" style="width: {carryFraction * 118}px"></span></span>
+      <span class="carry-value">{Math.round(carry.current)} / {Math.round(carry.max)}</span>
+    </span>
   </div>
 
   <div class="level">
@@ -64,20 +85,7 @@
   </div>
 
   <div class="submenu">
-    <Hotkey key="A" />
-    <div class="outfits">
-      {#each outfits.defined as _, index}
-        <button class="outfit" class:active={index === outfits.active} onclick={() => onoutfit(index)}>
-          Outfit {index + 1}
-        </button>
-      {/each}
-    </div>
-    <Hotkey key="D" />
-    {#if outfits.missing > 0}
-      <p class="missing">
-        {outfits.missing === 1 ? '1 item is' : `${outfits.missing} items are`} no longer in the inventory
-      </p>
-    {/if}
+    {@render submenu()}
   </div>
 </header>
 
@@ -134,7 +142,6 @@
     color: var(--muted);
   }
   .tab.active {
-    width: 221px;
     height: auto;
     font-size: 40px;
     color: var(--text);
@@ -148,45 +155,76 @@
     align-items: center;
     justify-content: flex-end;
   }
-  .counters > * + * {
-    margin-left: 49px;
+  .counters > :global(* + *) {
+    margin-left: 16px;
   }
   .counter {
     display: flex;
     align-items: center;
-    font-family: var(--font-condensed);
-    font-weight: 700;
-    font-size: 24px;
-    line-height: normal;
-    white-space: nowrap;
-  }
-  .counter > * + * {
-    margin-left: 4px;
   }
   .counter img {
     display: block;
+    margin-right: 4px;
   }
-  /* mingcute:coin-fill, two vector parts placed inside a square, as in the design. */
-  .coin {
+  .souls {
+    font-family: var(--font-condensed);
+    font-weight: 700;
+    font-size: 22px;
+    line-height: normal;
+    color: #a9c3d1;
+  }
+  .carry {
+    display: flex;
+    align-items: center;
+  }
+  .carry > * + * {
+    margin-left: 17px;
+  }
+  .carry-label {
+    display: flex;
+    align-items: center;
+    font-family: var(--font-medium);
+    font-weight: 500;
+    font-size: 22px;
+    line-height: normal;
+    white-space: nowrap;
+    color: #a9c3d1;
+  }
+  .carry-icon {
     position: relative;
-    width: 29px;
-    height: 29px;
-    overflow: hidden;
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
   }
-  .coin img {
+  .carry-icon img {
     position: absolute;
+    left: 1.82px;
+    top: 1.82px;
+    width: 10.363px;
+    height: 10.363px;
   }
-  .coin-a {
-    top: 96.43%;
-    left: 50.32%;
-    width: 3.48%;
-    height: 2.79%;
+  .carry-bar {
+    position: relative;
+    display: block;
+    width: 120px;
+    height: 6px;
+    background: rgba(7, 11, 16, 0.6);
+    border: 1px solid rgba(143, 169, 184, 0.35);
   }
-  .coin-b {
-    top: 20.83%;
-    left: 8.33%;
-    width: 83.34%;
-    height: 58.34%;
+  .carry-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 4px;
+    background: #7fd6c2;
+  }
+  .carry-value {
+    font-family: var(--font-condensed-medium);
+    font-weight: 500;
+    font-size: 22px;
+    line-height: normal;
+    white-space: nowrap;
+    color: var(--ink);
   }
 
   .level {
@@ -238,9 +276,11 @@
     );
   }
 
+  /* Across the whole bar, centred: the submenu's width (outfits or item
+     categories) must not move the main tabs above it. */
   .submenu {
     position: relative;
-    grid-column: 2;
+    grid-column: 1 / -1;
     grid-row: 2;
     align-self: end;
     justify-self: center;
@@ -248,52 +288,5 @@
     align-items: center;
     justify-content: center;
     padding: 10px;
-  }
-  .outfits {
-    display: flex;
-    align-items: center;
-    margin: 0 10px;
-    padding: 0 24px;
-  }
-  .outfit + .outfit {
-    margin-left: 47px;
-  }
-  .outfit {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 34px;
-    font-family: var(--font-medium);
-    font-weight: 500;
-    font-size: 24px;
-    line-height: normal;
-    text-transform: uppercase;
-    white-space: nowrap;
-    color: var(--muted);
-    border-bottom: 1px solid transparent;
-  }
-  .outfit.active {
-    height: auto;
-    font-size: 28px;
-    color: var(--text);
-    border-bottom-color: var(--text);
-  }
-  /* Not in the design: shown when an outfit wanted something that is gone. */
-  .missing {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    width: 100%;
-    margin: 6px 0 0;
-    text-align: center;
-    font-family: var(--font-condensed);
-    font-weight: 500;
-    font-size: 18px;
-    line-height: normal;
-    white-space: nowrap;
-    color: var(--negative);
-  }
-  .outfit:focus {
-    border-bottom-color: var(--negative);
   }
 </style>

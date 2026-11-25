@@ -84,6 +84,67 @@ namespace
 	int                 framesLoaded = 0;
 	int                 teardownWaited = 0;
 
+	// ---- the Inventory tab's live 3D preview ---------------------------------
+	//
+	// Same scene as the pictures, so it waits for them: while any picture is
+	// queued the preview is not drawn. Then the item is loaded, scaled and
+	// moved so its bounding sphere fills the page's preview box, turned, and
+	// Render() paints it straight into the frame (no save / restore), where
+	// the page has left that box transparent.
+	//
+	// The engine keeps one node per model file and reuses it, so whatever we
+	// do to the node (scale, turn, move) is undone before anything else uses
+	// the scene: another preview item, a picture, the end of the session.
+
+	struct PreviewRect
+	{
+		float left = 0.0f, top = 0.0f, width = 0.0f, height = 0.0f;  // fractions of the screen
+	};
+	std::atomic<RE::FormID> previewID{ 0 };  // main thread writes, PostDisplay reads
+	PreviewRect             previewRect;     // guarded by stateLock
+	std::atomic<float>      previewTurn{ 0.0f };   // degrees asked for since PostDisplay last looked
+	std::atomic<int>        previewIdle{ 0 };      // frames since the player last turned it
+
+	// PostDisplay only.
+	RE::FormID          previewLoaded = 0;
+	RE::TESBoundObject* previewObject = nullptr;
+	float               previewAngle = 0.0f;  // radians
+	struct SavedNode
+	{
+		RE::NiPointer<RE::NiAVObject> node;
+		RE::NiMatrix3                 rotate;
+		RE::NiPoint3                  translate;
+		float                         scale = 1.0f;
+	} previewSaved;
+
+	// The slow turn while nobody turns it, degrees per frame, and how long a
+	// turn by the player holds it still.
+	constexpr float PREVIEW_SPIN = 0.35f;
+	constexpr int   PREVIEW_HOLD_FRAMES = 180;
+	// Share of the box the bounding sphere's diameter fills.
+	constexpr float PREVIEW_FILL = 0.9f;
+
+	void RestorePreviewNode()
+	{
+		auto& saved = previewSaved;
+		if (!saved.node) {
+			return;
+		}
+		saved.node->local.rotate = saved.rotate;
+		saved.node->local.translate = saved.translate;
+		saved.node->local.scale = saved.scale;
+		RE::NiUpdateData update;
+		saved.node->Update(update);
+		saved.node.reset();
+	}
+
+	void ForgetPreview()
+	{
+		RestorePreviewNode();
+		previewLoaded = 0;
+		previewObject = nullptr;
+	}
+
 	std::filesystem::path FilePath(RE::FormID a_formID)
 	{
 		return std::filesystem::path(CACHE_DIR) / std::format("{:08X}.png", a_formID);
@@ -182,17 +243,17 @@ namespace
 		}
 	}
 
-	// The loaded model for the current item: by item, or else an entry with the
-	// same model file (the engine shares one entry between items that use one file).
-	RE::NiAVObject* CurrentModel(RE::Inventory3DManager* a_manager)
+	// The loaded model for an item: by item, or else an entry with the same
+	// model file (the engine shares one entry between items that use one file).
+	RE::NiAVObject* ModelOf(RE::Inventory3DManager* a_manager, RE::TESBoundObject* a_object)
 	{
 		auto& models = a_manager->GetRuntimeData().loadedModels;
 		for (auto& entry : models) {
-			if ((entry.itemBase == current || entry.modelObj == current) && entry.spModel) {
+			if ((entry.itemBase == a_object || entry.modelObj == a_object) && entry.spModel) {
 				return entry.spModel.get();
 			}
 		}
-		const char* path = ModelPath(current);
+		const char* path = ModelPath(a_object);
 		if (path && *path) {
 			for (auto& entry : models) {
 				if (!entry.spModel) {
@@ -208,6 +269,8 @@ namespace
 		}
 		return nullptr;
 	}
+
+	RE::NiAVObject* CurrentModel(RE::Inventory3DManager* a_manager) { return ModelOf(a_manager, current); }
 
 	// Most armor records set only the male "ground" model (Skyrim.esm: 1881 of
 	// them), and for some the inventory preview's load then never finishes
@@ -515,6 +578,7 @@ namespace
 	// Ends the session when the scene allows it. True once it has ended.
 	bool TryTeardown(RE::Inventory3DManager* a_manager)
 	{
+		ForgetPreview();
 		if (!inSession) {
 			return true;
 		}
@@ -531,6 +595,186 @@ namespace
 		inSession = false;
 		teardownWaited = 0;
 		return true;
+	}
+
+	// Paints the preview box in the page's background colour (#070B10), so
+	// the box does not show whatever the frame had there. Values are sRGB;
+	// an sRGB render target takes linear ones.
+	void ClearPreviewBox(const PreviewRect& a_box)
+	{
+		auto* renderer = RE::BSGraphics::Renderer::GetSingleton();
+		const auto screen = RE::BSGraphics::Renderer::GetScreenSize();
+		if (!renderer || screen.width == 0 || screen.height == 0) {
+			return;
+		}
+		const auto& data = renderer->GetRuntimeData();
+		auto*       context = reinterpret_cast<ID3D11DeviceContext*>(data.context);
+		auto*       target = reinterpret_cast<ID3D11RenderTargetView*>(data.renderWindows[0].renderView);
+		if (!context || !target) {
+			return;
+		}
+		D3D11_RENDER_TARGET_VIEW_DESC view{};
+		target->GetDesc(&view);
+		const bool srgb = view.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB || view.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		const auto channel = [&](float a_srgb) {
+			return srgb ? (a_srgb <= 0.04045f ? a_srgb / 12.92f : std::pow((a_srgb + 0.055f) / 1.055f, 2.4f)) : a_srgb;
+		};
+		const FLOAT colour[4]{ channel(7.0f / 255.0f), channel(11.0f / 255.0f), channel(16.0f / 255.0f), 1.0f };
+
+		// The frame may be larger than the screen size the UI works in.
+		ID3D11Resource* resource = nullptr;
+		target->GetResource(&resource);
+		ID3D11Texture2D* frame = nullptr;
+		if (resource) {
+			resource->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&frame));
+			resource->Release();
+		}
+		if (!frame) {
+			return;
+		}
+		D3D11_TEXTURE2D_DESC desc{};
+		frame->GetDesc(&desc);
+		frame->Release();
+		const D3D11_RECT rect{ static_cast<LONG>(a_box.left * desc.Width), static_cast<LONG>(a_box.top * desc.Height),
+			static_cast<LONG>((a_box.left + a_box.width) * desc.Width), static_cast<LONG>((a_box.top + a_box.height) * desc.Height) };
+
+		ID3D11DeviceContext1* context1 = nullptr;
+		context->QueryInterface(__uuidof(ID3D11DeviceContext1), reinterpret_cast<void**>(&context1));
+		if (context1) {
+			context1->ClearView(target, colour, &rect, 1);
+			context1->Release();
+		}
+	}
+
+	// Scale and move the preview model so its bounding sphere fills the page's
+	// box, turned by previewAngle about the vertical. Same projection as
+	// ModelRect (and Grid Inventory's ItemPreview::UpdateParking), inverted.
+	void PlacePreview(RE::NiAVObject* a_model)
+	{
+		auto* scene = RE::UI3DSceneManager::GetSingleton();
+		const auto screen = RE::BSGraphics::Renderer::GetScreenSize();
+		if (!scene || screen.width == 0 || screen.height == 0) {
+			return;
+		}
+		PreviewRect box;
+		{
+			std::scoped_lock lock(stateLock);
+			box = previewRect;
+		}
+		const float boxLeft = box.left * screen.width;
+		const float boxTop = box.top * screen.height;
+		const float boxWidth = box.width * screen.width;
+		const float boxHeight = box.height * screen.height;
+		if (boxWidth < 8.0f || boxHeight < 8.0f) {
+			return;
+		}
+
+		if (previewSaved.node.get() != a_model) {
+			RestorePreviewNode();
+			previewSaved = { RE::NiPointer<RE::NiAVObject>(a_model), a_model->local.rotate, a_model->local.translate, a_model->local.scale };
+		}
+
+		// Turn, from the pose the engine gave it.
+		RE::NiMatrix3 spin;
+		spin.SetEulerAnglesXYZ(0.0f, 0.0f, previewAngle);
+		a_model->local.rotate = spin * previewSaved.rotate;
+		a_model->local.scale = previewSaved.scale;
+		RE::NiUpdateData update;
+		a_model->Update(update);
+
+		const auto& frustum = scene->viewFrustum;
+		const float depth = a_model->local.translate.y;
+		const float minX = -frustum.fLeft * depth;
+		const float minZ = -frustum.fBottom * depth;
+		const float ratioX = (-frustum.fRight * depth - minX) / static_cast<float>(screen.width);
+		const float ratioY = (-frustum.fTop * depth - minZ) / static_cast<float>(screen.height);
+		if (ratioX == 0.0f || ratioY == 0.0f || !std::isfinite(ratioX) || !std::isfinite(ratioY)) {
+			return;
+		}
+
+		// Size: the sphere's diameter on screen to PREVIEW_FILL of the box.
+		const float radiusPixels = a_model->worldBound.radius / std::abs(ratioX);
+		if (radiusPixels > 0.5f) {
+			const float factor = std::clamp(PREVIEW_FILL * std::min(boxWidth, boxHeight) / (2.0f * radiusPixels), 0.02f, 50.0f);
+			a_model->local.scale = previewSaved.scale * factor;
+			a_model->Update(update);
+		}
+
+		// Place: the sphere's centre on the box's centre.
+		const auto& centre = a_model->worldBound.center;
+		const float modelX = -(centre.x + minX) / ratioX;
+		const float modelY = -(centre.z + minZ) / ratioY;
+		const float dx = boxLeft + boxWidth / 2.0f - modelX;
+		const float dy = boxTop + boxHeight / 2.0f - modelY;
+		if (std::isfinite(dx) && std::isfinite(dy)) {
+			a_model->local.translate.x += -dx * ratioX;
+			a_model->local.translate.z += -dy * ratioY;
+			a_model->Update(update);
+		}
+	}
+
+	// Once per frame while the preview is wanted and no picture is being made.
+	void PreviewStep(RE::Inventory3DManager* a_manager)
+	{
+		const auto id = previewID.load();
+		if (!inSession) {
+			a_manager->Begin3D(RE::INTERFACE_LIGHT_SCHEME::kInventory);
+			inSession = true;
+		}
+
+		if (previewLoaded != id) {
+			ForgetPreview();
+			auto* object = RE::TESForm::LookupByID<RE::TESBoundObject>(id);
+			if (!object || object->Is(RE::FormType::LeveledItem)) {
+				previewLoaded = id;  // nothing to show; the box stays empty
+				return;
+			}
+			if (a_manager->GetRuntimeData().loadedModels.size() >= RESET_AT) {
+				if (UnsafeToTearDown(a_manager)) {
+					return;  // next frame
+				}
+				a_manager->End3D();
+				a_manager->Begin3D(RE::INTERFACE_LIGHT_SCHEME::kInventory);
+			}
+			HealGroundModel(object);
+			a_manager->UnloadInventoryItem();
+			a_manager->LoadInventoryItem(object, nullptr);
+			previewLoaded = id;
+			previewObject = object;
+			previewAngle = 0.0f;
+			logger::info("Preview: {} ({:08X})", object->GetName(), id);
+			return;
+		}
+		if (!previewObject) {
+			return;
+		}
+
+		auto* model = ModelOf(a_manager, previewObject);
+		if (!model || model->worldBound.radius <= 0.0f) {
+			// Loading finishes inside Render(); keep it off screen until then.
+			PumpRender(a_manager);
+			return;
+		}
+
+		// Turn: what the player asked for, else a slow spin once they let go.
+		const float asked = previewTurn.exchange(0.0f);
+		if (asked != 0.0f) {
+			previewIdle = 0;
+		}
+		const int   idle = previewIdle.fetch_add(1);
+		const float degrees = asked + (idle > PREVIEW_HOLD_FRAMES ? PREVIEW_SPIN : 0.0f);
+		previewAngle = std::fmod(previewAngle + degrees * 0.017453292f, 6.2831853f);
+
+		PlacePreview(model);
+		{
+			PreviewRect box;
+			{
+				std::scoped_lock lock(stateLock);
+				box = previewRect;
+			}
+			ClearPreviewBox(box);
+		}
+		a_manager->Render();  // into the frame, under the page's transparent box
 	}
 
 	// Once per frame, from the capture menu's PostDisplay.
@@ -562,6 +806,7 @@ namespace
 
 		if (!enabled) {
 			// The screen closed: end the session only if that is safe right now.
+			ForgetPreview();
 			if (current) {
 				std::scoped_lock lock(stateLock);
 				queued.erase(currentID);
@@ -584,6 +829,10 @@ namespace
 					next = queue.front();
 					queue.pop_front();
 				}
+			}
+			if (next == 0 && previewID.load() != 0) {
+				PreviewStep(manager);
+				return;
 			}
 			if (next == 0) {
 				stop();
@@ -610,6 +859,8 @@ namespace
 			working = true;
 			framesWaited = 0;
 			framesLoaded = 0;
+			// Pictures first: the preview item is loaded again afterwards.
+			ForgetPreview();
 
 			if (!inSession) {
 				manager->Begin3D(RE::INTERFACE_LIGHT_SCHEME::kInventory);
@@ -795,11 +1046,12 @@ void Thumbnails::Tick(const std::function<void()>& a_onBatchDone)
 	}
 	enabled = true;
 
-	if (!menuOpen && Pending() > 0) {
+	const bool previewing = previewID.load() != 0;
+	if (!menuOpen && (Pending() > 0 || previewing)) {
 		sessionOver = false;
 		SendMenuMessage(RE::UI_MESSAGE_TYPE::kShow);
 		menuOpen = true;
-	} else if (menuOpen && sessionOver) {
+	} else if (menuOpen && sessionOver && !previewing) {
 		SendMenuMessage(RE::UI_MESSAGE_TYPE::kHide);
 		menuOpen = false;
 	}
@@ -832,6 +1084,23 @@ void Thumbnails::AbortTick()
 	if (menuOpen && !enabled) {
 		SendMenuMessage(RE::UI_MESSAGE_TYPE::kHide);
 		menuOpen = false;
+	}
+}
+
+void Thumbnails::SetPreview(RE::FormID a_formID, float a_left, float a_top, float a_width, float a_height)
+{
+	{
+		std::scoped_lock lock(stateLock);
+		previewRect = { a_left, a_top, a_width, a_height };
+	}
+	// The preview needs the capture menu, whether or not pictures are made.
+	previewID = menuRegistered ? a_formID : 0;
+}
+
+void Thumbnails::TurnPreview(float a_degrees)
+{
+	float now = previewTurn.load();
+	while (!previewTurn.compare_exchange_weak(now, now + a_degrees)) {
 	}
 }
 

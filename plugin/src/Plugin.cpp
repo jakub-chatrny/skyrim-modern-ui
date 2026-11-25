@@ -67,6 +67,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 				CharacterMenu::Install();
 			} else if (a_msg->type == SKSE::MessagingInterface::kPostLoadGame || a_msg->type == SKSE::MessagingInterface::kNewGame) {
 				CheckControlsAfterLoad();
+				SKSE::GetTaskInterface()->AddTask([]() { CharacterMenu::Prewarm(); });
 			}
 		})) {
 		logger::error("Failed to register SKSE messaging listener");

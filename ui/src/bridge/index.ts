@@ -1,10 +1,11 @@
 import fixture from '../../../shared/fixtures/character.json'
 import { createMockGame } from './mock'
-import type { Bridge, Command, ItemList, Snapshot } from './types'
+import type { Bridge, Command, Inventory, ItemList, Snapshot } from './types'
 
 // Contract with the SKSE plugin (plugin/src/CharacterMenu.cpp):
 //   plugin -> UI : window.smuiReceive(json)   Snapshot as a JSON string
 //   plugin -> UI : window.smuiItems(json)     ItemList, the answer to `listItems`
+//   plugin -> UI : window.smuiInventory(json) Inventory, the answer to `listInventory`
 //   UI -> plugin : window.smuiCommand(json)   Command as a JSON string
 // Prisma UI injects smuiCommand (RegisterJSListener); outside the game it is
 // missing and a small mock game answers from the fixture instead.
@@ -12,6 +13,7 @@ declare global {
   interface Window {
     smuiReceive?: (json: string) => void
     smuiItems?: (json: string) => void
+    smuiInventory?: (json: string) => void
     smuiCommand?: (json: string) => void
   }
 }
@@ -24,11 +26,13 @@ const MOCK_FALLBACK_MS = 300
 export interface BridgeHandlers {
   onSnapshot: (snapshot: Snapshot) => void
   onItems: (list: ItemList) => void
+  onInventory: (inventory: Inventory) => void
 }
 
-export function connect({ onSnapshot, onItems }: BridgeHandlers): Bridge {
+export function connect(handlers: BridgeHandlers): Bridge {
+  const { onSnapshot, onItems, onInventory } = handlers
   let received = false
-  const mockGame = createMockGame(fixture as Snapshot, { onSnapshot, onItems })
+  const mockGame = createMockGame(fixture as Snapshot, handlers)
 
   const bridge = {
     mock: false,
@@ -52,6 +56,12 @@ export function connect({ onSnapshot, onItems }: BridgeHandlers): Bridge {
     const list = JSON.parse(json) as ItemList
     console.log(`[bridge] ${list.items.length} item(s) for ${list.slot}`)
     onItems(list)
+  }
+
+  window.smuiInventory = (json) => {
+    const inventory = JSON.parse(json) as Inventory
+    console.log(`[bridge] inventory: ${inventory.items.length} item(s)`)
+    onInventory(inventory)
   }
 
   bridge.send({ type: 'ready' })

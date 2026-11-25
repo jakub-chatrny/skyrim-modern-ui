@@ -5,8 +5,8 @@ in the middle, framed by an arch, with equipment, outfits, active effects, survi
 skills around it. The screen is a web page (Svelte) shown in game through [Prisma UI](https://www.prismaui.dev),
 fed by a small SKSE plugin.
 
-**Status: working prototype.** The Character screen works in game; the other tabs in the top bar (Map, Quests,
-Magic, Inventory, Skills) are placeholders.
+**Status: working prototype.** The Character and Inventory tabs work in game; the other tabs in the top bar
+(Map, Quests, Magic, Skills) are placeholders.
 
 ![The Character screen in game](docs/img/character-screen.jpg)
 
@@ -38,14 +38,27 @@ Start the game through SKSE, load a save, press **F4**.
 | Key | Does |
 |---|---|
 | F4 | Open and close the screen (Esc is left to the game) |
-| W / S, arrow keys, mouse | Move the selection (W / S go round the twelve tiles) |
+| Q / E | Switch between the Character and Inventory tabs |
+| W / S, arrow keys, mouse | Move the selection (on Character, W / S go round the twelve tiles) |
+| R | Drop the selected item (a tile, a grid item, or the highlighted row of an item list) |
+| F | Mark or unmark the selected item as a favourite |
+
+Character tab:
+
+| Key | Does |
+|---|---|
 | Enter, Space, click | Open the item list of the selected slot, pick an item |
 | A / D | Previous / next outfit |
 | 1 – 4 | Outfit 1 to 4 |
-| E | Take off the selected tile's item |
-| R | Drop the selected item (on a tile, or the highlighted row of an item list) |
-| F | Mark or unmark the selected item as a favourite |
-| Q | Reserved for the main tabs (nothing yet) |
+| X | Take off the selected tile's item |
+
+Inventory tab:
+
+| Key | Does |
+|---|---|
+| A / D | Previous / next category (All, Weapons, Armor, Potions, Food, Ingredients, Books, Misc) |
+| Enter, click | Equip or take off gear; drink, eat or use potions, food and ingredients |
+| Sort buttons (mouse) | Sort by name, type, weight, value or value per weight; click again to reverse |
 
 Camera framing and other settings are in `Data/SKSE/Plugins/SkyrimModernUI.json`; it is read every time the
 screen opens, so changes need no restart. On Linux the Proton prefix needs a current Visual C++ runtime for
@@ -57,13 +70,19 @@ Prisma UI: `protontricks 489830 vcrun2022`.
   (or brings the camera closer), but under a low roof edge the game's camera can still end up right at the
   character. Step out from under it before opening the screen.
 - **No gamepad support yet.** Keyboard and mouse only.
-- **Only the Character tab exists.** The other tabs in the top bar do nothing.
+- **Only the Character and Inventory tabs exist.** Map, Quests, Magic and Skills do nothing yet.
+- **Books cannot be read from the Inventory tab** yet; use the game's own inventory.
+- **Rarity is ours, not the game's.** Items with one enchantment are rare (blue frame), two are epic (purple);
+  unique items and Daedric artifacts are legendary (gold).
 
 ## Design
 
 Figma: [Skyrim UI](https://www.figma.com/design/XysgSJjTgysHlN2y6StFND/Skyrim-UI?node-id=2007-3644), frame
-"Character / Iter 4". The screen is built at the frame's pixel sizes (2507 x 1511) and scaled to fit the window
-(`ui/src/screens/CharacterScreen.svelte`). Assets exported from the file are in `ui/src/assets/design/iter4/`.
+"Character / Iter 4" (2507 x 1511), and
+[Skyrim Modern UI](https://www.figma.com/design/UNyXAYouKVcPGIP56lT4UV/Skyrim-Modern-UI?node-id=13-3635), frame
+"Inventory / Iter 3" (2507 x 1480). Each screen is built at its frame's pixel sizes and scaled to fit the window
+(`ui/src/screens/CharacterScreen.svelte`, `InventoryScreen.svelte`). Assets exported from the files are in
+`ui/src/assets/design/iter4/` and `ui/src/assets/design/inventory/`.
 
 Where to find things:
 

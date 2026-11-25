@@ -549,3 +549,43 @@ bool Equipment::ToggleFavorite(RE::FormID a_formID)
 	logger::info("Favourite: {} ({:#010x}) {}", entry->object->GetName(), a_formID, was ? "cleared" : "set");
 	return true;
 }
+
+bool Equipment::Use(RE::FormID a_formID)
+{
+	auto* player = RE::PlayerCharacter::GetSingleton();
+	auto* object = RE::TESForm::LookupByID<RE::TESBoundObject>(a_formID);
+	const auto count = object ? Count(player, object) : 0;
+	if (count <= 0) {
+		logger::info("Use {:#010x}: not in the inventory", a_formID);
+		return false;
+	}
+
+	using Type = RE::FormType;
+	switch (object->GetFormType()) {
+	case Type::Weapon:
+	case Type::Armor:
+	case Type::Ammo:
+	case Type::Light:
+	case Type::Scroll:
+		{
+			// Worn: take it off. Otherwise put it on, as the Character screen does.
+			const auto [entry, list] = LiveEntry(player, a_formID);
+			if (IsWorn(list)) {
+				const auto amount = object->IsAmmo() ? static_cast<std::uint32_t>(count) : 1u;
+				RE::ActorEquipManager::GetSingleton()->UnequipObject(player, object, list, amount, nullptr, false, false, true, true);
+				logger::info("Use: {} ({:#010x}) taken off", object->GetName(), a_formID);
+				return true;
+			}
+			return Equip(a_formID, std::nullopt);
+		}
+	case Type::AlchemyItem:
+	case Type::Ingredient:
+		// Equipping a potion, food or ingredient is how the game drinks or eats it.
+		RE::ActorEquipManager::GetSingleton()->EquipObject(player, object, nullptr, 1);
+		logger::info("Use: {} ({:#010x}) consumed", object->GetName(), a_formID);
+		return true;
+	default:
+		logger::info("Use: {} ({:#010x}) cannot be used from this screen", object->GetName(), a_formID);
+		return false;
+	}
+}

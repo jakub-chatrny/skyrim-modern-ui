@@ -10,4 +10,7 @@ namespace Snapshot
 
 	// The items that could go into a slot, as `ItemList` in the schema.
 	nlohmann::json BuildItemList(Equipment::Slot a_slot);
+
+	// Everything the player carries, for the Inventory tab, as `Inventory` in the schema.
+	nlohmann::json BuildInventory();
 }

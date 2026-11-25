@@ -42,4 +42,14 @@ namespace Thumbnails
 	// Call every frame while the screen is closed; closes the capture menu once
 	// the preview scene has been torn down.
 	void AbortTick();
+
+	// The Inventory tab's live 3D preview: draw this item, turning, into the
+	// box given as fractions of the screen (the page leaves it transparent).
+	// 0 = no preview. Pictures still queued are made first. The game is
+	// paused while the preview shows (the engine draws it only then).
+	void SetPreview(RE::FormID a_formID, float a_left, float a_top, float a_width, float a_height);
+
+	// Turn the preview by this much about its vertical axis; the slow spin
+	// waits a few seconds after the player turns it.
+	void TurnPreview(float a_degrees);
 }

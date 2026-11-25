@@ -33,11 +33,14 @@ namespace
 	// asking it (HasFocus) right after a call returns stale answers.
 	bool isOpen = false;
 	std::chrono::steady_clock::time_point lastToggle{};
+	// Frames since the screen opened, for the slow-frame log below.
+	int framesSinceOpen = 0;
 
 	void Open()
 	{
 		logger::info("Open");
 		isOpen = true;
+		framesSinceOpen = 0;
 		const auto stage = CameraStage::LoadConfig();
 		CameraStage::Enter(stage);
 		prisma->Show(view);
@@ -60,6 +63,7 @@ namespace
 	{
 		logger::info("Close");
 		isOpen = false;
+		Thumbnails::SetPreview(0, 0.0f, 0.0f, 0.0f, 0.0f);
 		prisma->Unfocus(view);
 		prisma->Hide(view);
 		Thumbnails::Abort();
@@ -157,14 +161,17 @@ namespace
 				} else {
 					Equipment::Equip(formID, Equipment::SlotFromName(command.value("slot", "")));
 				}
-			} else if (type == "drop" || type == "favorite") {
+			} else if (type == "drop" || type == "favorite" || type == "use") {
 				// formId arrives as "0x0001397E".
 				const auto id = command.value("formId", "");
 				RE::FormID formID = 0;
 				const auto [end, error] = std::from_chars(id.data() + (id.starts_with("0x") ? 2 : 0), id.data() + id.size(), formID, 16);
+				const auto act = [&]() {
+					return type == "drop" ? Equipment::Drop(formID) : type == "use" ? Equipment::Use(formID) : Equipment::ToggleFavorite(formID);
+				};
 				if (error != std::errc{} || end != id.data() + id.size()) {
 					logger::warn("{}: bad formId in {}", type, text);
-				} else if (type == "drop" ? Equipment::Drop(formID) : Equipment::ToggleFavorite(formID)) {
+				} else if (act()) {
 					// Neither fires an equip event every time (a favourite never
 					// does), so answer with fresh data on the next task run.
 					SKSE::GetTaskInterface()->AddTask([]() {
@@ -182,6 +189,29 @@ namespace
 					const auto script = "window.smuiItems && window.smuiItems(" + payload + ")";
 					prisma->Invoke(view, script.c_str());
 				}
+			} else if (type == "preview" && !isOpen) {
+				// The page can ask while it is hidden (a snapshot pushed ahead of time);
+				// only an open screen shows the preview.
+				Thumbnails::SetPreview(0, 0.0f, 0.0f, 0.0f, 0.0f);
+			} else if (type == "preview") {
+				// The Inventory tab: hide the character, and show this item in 3D in
+				// the box the page left transparent (fractions of the window).
+				const bool open = command.value("open", false);
+				CameraStage::SetCharacterHidden(open);
+				RE::FormID formID = 0;
+				if (open && command.contains("formId") && command["formId"].is_string()) {
+					const auto id = command["formId"].get<std::string>();
+					std::from_chars(id.data() + (id.starts_with("0x") ? 2 : 0), id.data() + id.size(), formID, 16);
+				}
+				const auto rect = command.value("rect", nlohmann::json::object());
+				Thumbnails::SetPreview(formID, rect.value("left", 0.0f), rect.value("top", 0.0f), rect.value("width", 0.0f),
+					rect.value("height", 0.0f));
+			} else if (type == "turn") {
+				Thumbnails::TurnPreview(command.value("degrees", 0.0f));
+			} else if (type == "listInventory") {
+				const auto payload = nlohmann::json(Snapshot::BuildInventory().dump()).dump();
+				const auto script = "window.smuiInventory && window.smuiInventory(" + payload + ")";
+				prisma->Invoke(view, script.c_str());
 			} else if (type == "switchOutfit") {
 				const auto index = command.value("index", -1);
 				if (index < 0 || !Outfits::Switch(static_cast<std::size_t>(index))) {
@@ -227,6 +257,16 @@ namespace
 			// The input manager calls its sinks every frame, events or not, which makes
 			// this the plugin's per-frame hook.
 			CameraStage::Tick();
+			// Slow frames right after opening, to find what the first open waits for.
+			{
+				static auto last = std::chrono::steady_clock::now();
+				const auto  now = std::chrono::steady_clock::now();
+				const auto  ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last).count();
+				last = now;
+				if (isOpen && ++framesSinceOpen <= 300 && ms > 100) {
+					logger::info("Slow frame: {} ms, frame {} after opening", ms, framesSinceOpen);
+				}
+			}
 			Equipment::TickDrops(isOpen);
 			if (isOpen) {
 				// When new item pictures are saved, tell the page where they are.
@@ -291,6 +331,9 @@ namespace
 			case 0x1F: name = "s"; break;
 			case 0x20: name = "d"; break;
 			case 0x21: name = "f"; break;
+			case 0x2D: name = "x"; break;
+			case 0x2C: name = "z"; break;
+			case 0x2E: name = "c"; break;
 			case 0x1C: name = "enter"; break;
 			case 0x39: name = " "; break;
 			case 0xC8: name = "arrowup"; break;
@@ -306,6 +349,17 @@ namespace
 		bool _keyHeld = false;
 		std::array<bool, 256> _held{};
 	};
+}
+
+void CharacterMenu::Prewarm()
+{
+	// The first open after starting the game froze for about two seconds
+	// before the page showed: the page had never been built. Give it the
+	// player's data now, while it is hidden, so it builds then.
+	if (prisma && !isOpen) {
+		logger::info("Prewarm: page built ahead of the first open");
+		PushSnapshot();
+	}
 }
 
 void CharacterMenu::Install()

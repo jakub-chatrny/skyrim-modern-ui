@@ -56,4 +56,8 @@ namespace CameraStage
 	// Call once per frame on the main thread while the game runs. Re-applies the
 	// world hiding to objects that appeared since the last call. Cheap when idle.
 	void Tick();
+
+	// Inventory tab: the character is hidden (the item preview is drawn where
+	// the page shows the item). Undone by Leave() as well.
+	void SetCharacterHidden(bool a_hidden);
 }

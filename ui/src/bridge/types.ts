@@ -127,6 +127,38 @@ export interface Snapshot {
   dropping?: string[]
 }
 
+/** Inventory tab categories, in the order of the design's submenu. */
+export type InventoryCategory = 'weapons' | 'armor' | 'potions' | 'food' | 'ingredients' | 'books' | 'misc'
+
+/** Skyrim has none; the plugin derives it from the enchantment (see Snapshot.cpp). */
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary'
+
+/** One kind of item the player carries, for the Inventory tab. */
+export interface InventoryEntry {
+  formId: string
+  name: string
+  category: InventoryCategory
+  /** "Heavy Armor · Body", "One-handed · Sword", "Potion", ... */
+  typeLabel: string
+  count: number
+  worn: boolean
+  favorite: boolean
+  /** Damage for weapons and ammo, armor for armor with a rating; weight and value always. */
+  stats: { damage?: number; armor?: number; weight: number; value: number }
+  enchantments: { name: string; element: 'frost' | 'fire' | 'shock' | 'holy' }[]
+  rarity: Rarity
+  /** What the item does or is: enchantment, potion effects, book card text. */
+  description: string | null
+  /** What the game knows beyond the card text: skill, speed, what a book teaches, a soul gem's soul, ... */
+  facts?: { label: string; value: string }[]
+  thumb: string | null
+}
+
+/** The plugin's answer to `listInventory`. */
+export interface Inventory {
+  items: InventoryEntry[]
+}
+
 export type Command =
   | { type: 'ready' }
   | { type: 'close' }
@@ -136,6 +168,21 @@ export type Command =
   | { type: 'switchOutfit'; index: number }
   | { type: 'drop'; formId: string }
   | { type: 'favorite'; formId: string }
+  | { type: 'listInventory' }
+  /** Enter on the Inventory tab: worn gear comes off, other gear goes on, potions and food are consumed. */
+  | { type: 'use'; formId: string }
+  /**
+   * The Inventory tab: open hides the character; formId is shown in 3D in
+   * rect (fractions of the window), which the page leaves transparent.
+   */
+  | {
+      type: 'preview'
+      open: boolean
+      formId?: string | null
+      rect?: { left: number; top: number; width: number; height: number }
+    }
+  /** Turn the 3D preview about its vertical axis. */
+  | { type: 'turn'; degrees: number }
 
 export interface Bridge {
   /** True when no game is attached and data comes from the fixture. */

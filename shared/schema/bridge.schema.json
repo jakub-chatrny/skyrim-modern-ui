@@ -526,12 +526,26 @@
             "type": {
               "enum": [
                 "drop",
-                "favorite"
+                "favorite",
+                "use"
               ],
-              "description": "drop: one of the item onto the ground; favorite: toggle its favourite mark."
+              "description": "drop: one of the item onto the ground; favorite: toggle its favourite mark; use: the Inventory tab's Enter (worn gear comes off, other gear goes on, potions, food and ingredients are consumed)."
             },
             "formId": {
               "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "listInventory",
+              "description": "Ask for everything the player carries; answered with window.smuiInventory(Inventory)."
             }
           }
         }
@@ -666,6 +680,161 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/InventoryItem"
+          }
+        }
+      }
+    },
+    "InventoryEntry": {
+      "description": "One kind of item the player carries, for the Inventory tab.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formId",
+        "name",
+        "category",
+        "typeLabel",
+        "count",
+        "worn",
+        "favorite",
+        "stats",
+        "enchantments",
+        "rarity",
+        "description",
+        "thumb"
+      ],
+      "properties": {
+        "formId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "weapons",
+            "armor",
+            "potions",
+            "food",
+            "ingredients",
+            "books",
+            "misc"
+          ]
+        },
+        "typeLabel": {
+          "type": "string",
+          "description": "\"Heavy Armor · Body\", \"One-handed · Sword\", \"Potion\", ..."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "worn": {
+          "type": "boolean"
+        },
+        "favorite": {
+          "type": "boolean"
+        },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "weight",
+            "value"
+          ],
+          "properties": {
+            "damage": {
+              "type": "number"
+            },
+            "armor": {
+              "type": "number"
+            },
+            "weight": {
+              "type": "number"
+            },
+            "value": {
+              "type": "integer"
+            }
+          }
+        },
+        "enchantments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "element"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "element": {
+                "enum": [
+                  "frost",
+                  "fire",
+                  "shock",
+                  "holy"
+                ]
+              }
+            }
+          }
+        },
+        "rarity": {
+          "enum": [
+            "common",
+            "rare",
+            "epic",
+            "legendary"
+          ],
+          "description": "Not a game value: one enchantment rare, two epic; unique items and Daedric artifacts legendary."
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "thumb": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "facts": {
+          "type": "array",
+          "description": "Label / value rows: skill, speed, reach, what a book teaches or raises, a soul gem's capacity and soul, quest item, stolen.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "value"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Inventory": {
+      "description": "The plugin's answer to listInventory.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InventoryEntry"
           }
         }
       }

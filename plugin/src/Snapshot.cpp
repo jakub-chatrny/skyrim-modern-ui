@@ -2,6 +2,7 @@
 
 #include "Snapshot.h"
 
+#include <bit>
 #include <unordered_set>
 
 #include "Equipment.h"
@@ -535,6 +536,345 @@ json Snapshot::Build()
 		snapshot["survival"] = std::move(survival);
 	}
 	return snapshot;
+}
+
+namespace
+{
+	// Inventory tab categories, as the Inventory design's submenu names them.
+	const char* Category(RE::TESBoundObject* a_object)
+	{
+		using Type = RE::FormType;
+		switch (a_object->GetFormType()) {
+		case Type::Weapon:
+		case Type::Ammo:
+			return "weapons";
+		case Type::Armor:
+			return "armor";
+		case Type::AlchemyItem:
+			return a_object->As<RE::AlchemyItem>()->IsFood() ? "food" : "potions";
+		case Type::Ingredient:
+			return "ingredients";
+		case Type::Book:
+			return "books";
+		default:
+			return "misc";
+		}
+	}
+
+	const char* WeaponKind(const RE::TESObjectWEAP* a_weapon)
+	{
+		using Type = RE::WEAPON_TYPE;
+		switch (a_weapon->GetWeaponType()) {
+		case Type::kOneHandSword: return "One-handed · Sword";
+		case Type::kOneHandDagger: return "One-handed · Dagger";
+		case Type::kOneHandAxe: return "One-handed · War Axe";
+		case Type::kOneHandMace: return "One-handed · Mace";
+		case Type::kTwoHandSword: return "Two-handed · Greatsword";
+		case Type::kTwoHandAxe: return "Two-handed · Battleaxe";
+		case Type::kBow: return "Bow";
+		case Type::kCrossbow: return "Crossbow";
+		case Type::kStaff: return "Staff";
+		default: return "Weapon";
+		}
+	}
+
+	std::string ArmorKind(const RE::TESObjectARMO* a_armor)
+	{
+		using Part = RE::BGSBipedObjectForm::BipedObjectSlot;
+		const char* weight = a_armor->IsHeavyArmor() ? "Heavy Armor" : a_armor->IsLightArmor() ? "Light Armor" : "Clothing";
+		const char* part = "Apparel";
+		if (a_armor->IsShield()) {
+			part = "Shield";
+		} else if (a_armor->HasPartOf(Part::kBody)) {
+			part = "Body";
+		} else if (a_armor->HasPartOf(Part::kHead) || a_armor->HasPartOf(Part::kHair) || a_armor->HasPartOf(Part::kCirclet)) {
+			part = "Head";
+		} else if (a_armor->HasPartOf(Part::kHands)) {
+			part = "Hands";
+		} else if (a_armor->HasPartOf(Part::kFeet)) {
+			part = "Feet";
+		} else if (a_armor->HasPartOf(Part::kAmulet)) {
+			return "Jewelry · Neck";
+		} else if (a_armor->HasPartOf(Part::kRing)) {
+			return "Jewelry · Ring";
+		}
+		return std::format("{} · {}", weight, part);
+	}
+
+	std::string TypeLabel(RE::TESBoundObject* a_object)
+	{
+		using Type = RE::FormType;
+		switch (a_object->GetFormType()) {
+		case Type::Weapon:
+			return WeaponKind(a_object->As<RE::TESObjectWEAP>());
+		case Type::Armor:
+			return ArmorKind(a_object->As<RE::TESObjectARMO>());
+		case Type::Ammo:
+			return a_object->As<RE::TESAmmo>()->IsBolt() ? "Bolt" : "Arrow";
+		case Type::AlchemyItem:
+			{
+				auto* potion = a_object->As<RE::AlchemyItem>();
+				return potion->IsFood() ? "Food" : potion->IsPoison() ? "Poison" : "Potion";
+			}
+		case Type::Ingredient:
+			return "Ingredient";
+		case Type::Book:
+			{
+				auto* book = a_object->As<RE::TESObjectBOOK>();
+				return book->TeachesSpell() ? "Spell Tome" : book->TeachesSkill() ? "Skill Book" : book->IsNoteScroll() ? "Note" : "Book";
+			}
+		case Type::Scroll:
+			return "Scroll";
+		case Type::SoulGem:
+			return "Soul Gem";
+		case Type::KeyMaster:
+			return "Key";
+		case Type::Light:
+			return "Torch";
+		default:
+			return "Miscellaneous";
+		}
+	}
+
+	// Which ring colour and glyph an enchantment effect gets in the design.
+	const char* Element(const RE::EffectSetting* a_effect)
+	{
+		switch (a_effect->data.resistVariable) {
+		case AV::kResistFrost: return "frost";
+		case AV::kResistFire: return "fire";
+		case AV::kResistShock: return "shock";
+		default: return "holy";
+		}
+	}
+
+	// The effect texts of a magic item, numbers filled in.
+	std::string EffectsText(RE::MagicItem* a_item, std::uint16_t a_knownMask = 0xFFFF)
+	{
+		std::string text;
+		std::size_t index = 0;
+		for (const auto* effect : a_item->effects) {
+			const bool known = (a_knownMask >> index++) & 1;
+			if (!effect || !effect->baseEffect || !known) {
+				continue;
+			}
+			auto line = FillDescription(effect->baseEffect->magicItemDescription.c_str(), effect->GetMagnitude(),
+				static_cast<float>(effect->GetDuration()));
+			if (line.empty()) {
+				line = effect->baseEffect->GetName();
+			}
+			if (!line.empty()) {
+				text += text.empty() ? line : " " + line;
+			}
+		}
+		return text;
+	}
+
+	std::string FormDescription(RE::TESForm* a_form, RE::TESDescription* a_description, std::uint32_t a_field = 'CSED')
+	{
+		if (!a_description) {
+			return {};
+		}
+		RE::BSString out;
+		a_description->GetDescription(out, a_form, a_field);
+		return out.c_str() ? std::string(out.c_str()) : std::string();
+	}
+
+	// Skyrim has no rarity; this is ours, from the enchantment (the Inventory
+	// design: one enchantment rare, two epic). Unique items, which the game
+	// will not let you disenchant, and Daedric artifacts are legendary.
+	constexpr RE::FormID MAGIC_DISALLOW_ENCHANTING = 0x000C27BD;
+	constexpr RE::FormID VENDOR_ITEM_DAEDRIC_ARTIFACT = 0x000917E8;
+
+	const char* Rarity(RE::TESBoundObject* a_object, std::size_t a_enchantments)
+	{
+		if (const auto* keywords = a_object->As<RE::BGSKeywordForm>()) {
+			if (keywords->HasKeywordID(VENDOR_ITEM_DAEDRIC_ARTIFACT) ||
+				(a_enchantments > 0 && keywords->HasKeywordID(MAGIC_DISALLOW_ENCHANTING))) {
+				return "legendary";
+			}
+		}
+		return a_enchantments >= 2 ? "epic" : a_enchantments == 1 ? "rare" : "common";
+	}
+
+	constexpr RE::FormID GOLD = 0x0000000F;
+
+	std::string SkillName(AV a_value)
+	{
+		for (const auto& skill : SKILLS) {
+			if (skill.value == a_value) {
+				return skill.name;
+			}
+		}
+		return ActorValueName(a_value);
+	}
+
+	const char* SoulName(RE::SOUL_LEVEL a_level)
+	{
+		switch (a_level) {
+		case RE::SOUL_LEVEL::kPetty: return "Petty";
+		case RE::SOUL_LEVEL::kLesser: return "Lesser";
+		case RE::SOUL_LEVEL::kCommon: return "Common";
+		case RE::SOUL_LEVEL::kGreater: return "Greater";
+		case RE::SOUL_LEVEL::kGrand: return "Grand";
+		default: return "Empty";
+		}
+	}
+
+	// What the game knows about an item beyond its card text, as label / value
+	// rows for the details panel: most items have no description at all.
+	json Facts(RE::PlayerCharacter* a_player, RE::TESBoundObject* a_object, RE::InventoryEntryData* a_entry)
+	{
+		json facts = json::array();
+		const auto add = [&](std::string_view a_label, std::string a_value) {
+			facts.push_back({ { "label", a_label }, { "value", std::move(a_value) } });
+		};
+		const auto yesNo = [](bool a_yes) { return std::string(a_yes ? "Yes" : "No"); };
+
+		if (const auto* weapon = a_object->As<RE::TESObjectWEAP>()) {
+			if (const auto skill = SkillName(weapon->weaponData.skill.get()); !skill.empty()) {
+				add("Skill", skill);
+			}
+			if (!weapon->IsStaff()) {
+				add("Speed", Number(weapon->GetSpeed(), 2));
+				if (!weapon->IsBow() && !weapon->IsCrossbow()) {
+					add("Reach", Number(weapon->GetReach(), 2));
+				}
+				add("Stagger", Number(weapon->GetStagger(), 2));
+				add("Critical damage", std::to_string(weapon->GetCritDamage()));
+			}
+		} else if (const auto* armor = a_object->As<RE::TESObjectARMO>()) {
+			if (armor->IsHeavyArmor()) {
+				add("Skill", "Heavy Armor");
+			} else if (armor->IsLightArmor()) {
+				add("Skill", "Light Armor");
+			}
+		} else if (auto* book = a_object->As<RE::TESObjectBOOK>()) {
+			if (book->TeachesSpell()) {
+				if (auto* spell = book->GetSpell()) {
+					add("Teaches", spell->GetName());
+					add("Learned", yesNo(a_player->HasSpell(spell)));
+				}
+			} else if (book->TeachesSkill()) {
+				if (const auto skill = SkillName(book->GetSkill()); !skill.empty()) {
+					add("Reading raises", skill);
+				}
+			}
+			if (!book->TeachesSpell()) {
+				add("Read", yesNo(book->IsRead()));
+			}
+		} else if (const auto* gem = a_object->As<RE::TESSoulGem>()) {
+			add("Capacity", SoulName(gem->GetMaximumCapacity()));
+			auto soul = a_entry ? a_entry->GetSoulLevel() : RE::SOUL_LEVEL::kNone;
+			if (soul == RE::SOUL_LEVEL::kNone) {
+				soul = gem->GetContainedSoul();
+			}
+			add("Soul", SoulName(soul));
+			if (gem->CanHoldNPCSoul()) {
+				add("Holds", "Black souls");
+			}
+		} else if (auto* ingredient = a_object->As<RE::IngredientItem>()) {
+			const auto total = ingredient->effects.size();
+			const auto known = std::popcount(static_cast<unsigned>(ingredient->gamedata.knownEffectFlags & ((1u << total) - 1)));
+			add("Effects known", std::format("{} of {}", known, total));
+		}
+
+		if (a_entry && a_entry->IsQuestObject()) {
+			add("Quest item", "Cannot be dropped");
+		}
+		if (a_entry && !a_entry->IsOwnedBy(a_player, true)) {
+			add("Stolen", "Yes");
+		}
+		return facts;
+	}
+}
+
+json Snapshot::BuildInventory()
+{
+	auto* player = RE::PlayerCharacter::GetSingleton();
+	auto  inventory = player->GetInventory([](RE::TESBoundObject& a_object) { return a_object.GetPlayable(); });
+
+	json items = json::array();
+	for (auto& [object, data] : inventory) {
+		auto& [count, entry] = data;
+		if (!object || count <= 0 || object->GetFormID() == GOLD || !entry) {
+			continue;
+		}
+		const char* name = entry->GetDisplayName();
+		if (!name || !*name) {
+			continue;  // nameless records are not meant to be seen
+		}
+
+		json stats = json::object();
+		if (object->IsWeapon()) {
+			stats["damage"] = std::round(player->GetDamage(entry.get()));
+		} else if (const auto* ammo = object->As<RE::TESAmmo>()) {
+			stats["damage"] = std::round(ammo->GetRuntimeData().data.damage);
+		} else if (object->IsArmor()) {
+			if (const float rating = player->GetArmorValue(entry.get()); rating > 0.0f) {
+				stats["armor"] = std::round(rating);
+			}
+		}
+		stats["weight"] = std::round(entry->GetWeight() * 10.0f) / 10.0f;
+		stats["value"] = entry->GetValue();
+
+		// Enchantment: the player's own on this copy first, else the item's.
+		RE::EnchantmentItem* enchanting = entry->GetEnchantment();
+		if (!enchanting) {
+			if (const auto* enchantable = object->As<RE::TESEnchantableForm>()) {
+				enchanting = enchantable->formEnchanting;
+			}
+		}
+		json enchantments = json::array();
+		if (enchanting) {
+			for (const auto* effect : enchanting->effects) {
+				if (effect && effect->baseEffect) {
+					enchantments.push_back({ { "name", effect->baseEffect->GetName() }, { "element", Element(effect->baseEffect) } });
+				}
+			}
+		}
+
+		// What the item does or is, as the game's own item card puts it.
+		std::string description;
+		if (enchanting) {
+			description = EffectsText(enchanting);
+		}
+		if (auto* potion = object->As<RE::AlchemyItem>()) {
+			description = EffectsText(potion);
+		} else if (auto* ingredient = object->As<RE::IngredientItem>()) {
+			description = EffectsText(ingredient, ingredient->gamedata.knownEffectFlags);
+			if (description.empty()) {
+				description = "Effects not yet discovered.";
+			}
+		} else if (auto* scroll = object->As<RE::ScrollItem>()) {
+			description = EffectsText(scroll);
+		} else if (auto* book = object->As<RE::TESObjectBOOK>()) {
+			description = FormDescription(book, &book->itemCardDescription, 'MANC');
+		}
+		if (const auto own = FormDescription(object, object->As<RE::TESDescription>()); !own.empty() && !object->Is(RE::FormType::Book)) {
+			description = description.empty() ? own : own + " " + description;
+		}
+
+		Thumbnails::Request(object);
+		const auto thumb = Thumbnails::UrlFor(object->GetFormID());
+		const auto enchantCount = enchantments.size();
+
+		items.push_back({
+			{ "formId", std::format("0x{:08X}", object->GetFormID()) },
+			{ "name", name },
+			{ "category", Category(object) },
+			{ "typeLabel", TypeLabel(object) },
+			{ "count", count },
+			{ "worn", entry->IsWorn() },
+			{ "favorite", entry->IsFavorited() },
+			{ "stats", std::move(stats) },
+			{ "enchantments", std::move(enchantments) },
+			{ "rarity", Rarity(object, enchantCount) },
+			{ "description", description.empty() ? json(nullptr) : json(description) },
+			{ "facts", Facts(player, object, entry.get()) },
+			{ "thumb", thumb.empty() ? json(nullptr) : json(thumb) },
+		});
+	}
+	return { { "items", std::move(items) } };
 }
 
 json Snapshot::BuildItemList(Equipment::Slot a_slot)

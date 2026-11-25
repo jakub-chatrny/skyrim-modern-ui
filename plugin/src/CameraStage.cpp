@@ -67,6 +67,9 @@ namespace
 	// Scene objects culled by HideWorld(), kept alive until ShowWorld().
 	std::vector<RE::NiPointer<RE::NiAVObject>> culled;
 	bool                                       hudWasVisible = false;
+	// The player's parts culled for the Inventory tab (not the stage's own nodes).
+	std::vector<RE::NiPointer<RE::NiAVObject>> hiddenParts;
+	bool                                       characterHidden = false;
 	bool                                       hudHidden = false;
 
 	bool IsAncestorOf(const RE::NiAVObject* a_ancestor, const RE::NiAVObject* a_object)
@@ -816,6 +819,7 @@ void CameraStage::Leave()
 	if (!saved.active) {
 		return;
 	}
+	SetCharacterHidden(false);
 	saved.active = false;
 
 	DetachBackdrop();
@@ -863,6 +867,21 @@ void CameraStage::Tick()
 {
 	if (!saved.active) {
 		return;
+	}
+	if (characterHidden) {
+		// Again each frame: the game shows actor parts again on its own.
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		auto* root = player ? player->Get3D(false) : nullptr;
+		if (auto* node = root ? root->AsNode() : nullptr) {
+			for (auto& child : node->GetChildren()) {
+				if (child && !IsOwnNode(child.get()) && !child->GetAppCulled()) {
+					child->SetAppCulled(true);
+					if (std::ranges::none_of(hiddenParts, [&](const auto& a_part) { return a_part.get() == child.get(); })) {
+						hiddenParts.emplace_back(child.get());
+					}
+				}
+			}
+		}
 	}
 	if (auto* player = RE::PlayerCharacter::GetSingleton()) {
 		++saved.frames;
@@ -919,4 +938,19 @@ bool CameraStage::IsOwnNode(const RE::NiAVObject* a_object)
 {
 	return std::ranges::any_of(backdropPlanes, [&](const auto& a_plane) { return a_plane.get() == a_object; }) ||
 	       std::ranges::any_of(studioLights, [&](const auto& a_light) { return a_light.get() == a_object; });
+}
+
+void CameraStage::SetCharacterHidden(bool a_hidden)
+{
+	if (a_hidden == characterHidden) {
+		return;
+	}
+	characterHidden = a_hidden && saved.active;
+	if (!characterHidden) {
+		for (auto& part : hiddenParts) {
+			part->SetAppCulled(false);
+		}
+		hiddenParts.clear();
+	}
+	logger::info("Camera stage: character {}", characterHidden ? "hidden" : "shown");
 }

@@ -20,7 +20,7 @@
   import ItemPicker from '../components/ItemPicker.svelte'
   import LeftPanel from '../components/LeftPanel.svelte'
   import RightPanel from '../components/RightPanel.svelte'
-  import TopBar from '../components/TopBar.svelte'
+  import TopBar, { type MainTab } from '../components/TopBar.svelte'
   import { itemIcon } from '../lib/icons'
   import { attachNavigation } from '../lib/navigation'
 
@@ -29,7 +29,14 @@
     itemList,
     bridge,
     mock,
-  }: { snapshot: Snapshot; itemList: ItemList | null; bridge: Bridge; mock: boolean } = $props()
+    ontab,
+  }: {
+    snapshot: Snapshot
+    itemList: ItemList | null
+    bridge: Bridge
+    mock: boolean
+    ontab: (tab: MainTab) => void
+  } = $props()
 
   const CANVAS_WIDTH = 2507
   const CANVAS_HEIGHT = 1511
@@ -155,8 +162,8 @@
   })
 
   // Keyboard and gamepad focus: inside the popup while it is open, otherwise
-  // the whole screen. Q / E and LB / RB would switch the main tabs; only
-  // Character exists. A / D step through the outfits, 1 to 4 pick one.
+  // the whole screen. Q / E and LB / RB switch the main tabs (Inventory is
+  // the only other one yet). A / D step through the outfits, 1 to 4 pick one.
   let canvas = $state<HTMLElement>()
   $effect(() => {
     const root = pickerElement ?? canvas
@@ -165,7 +172,7 @@
       // The screen opens with the first equipment tile selected, the popup with
       // the equipped item or else its first row.
       initial: pickerElement ? ['.row.equipped', '.row'] : ['.tile'],
-      onShoulder: (step) => console.log(`[ui] shoulder button ${step > 0 ? 'RB' : 'LB'}: no other tab yet`),
+      onShoulder: () => ontab('Inventory'),
       hotkeys: pickerElement
         ? {
             // In the item list: the highlighted row.
@@ -173,9 +180,10 @@
             f: () => onRow('favorite'),
           }
         : {
-            q: () => console.log('[ui] Q: no other tab yet'),
-            // On a tile: E takes the item off, R drops it, F toggles its favourite mark.
-            e: () => unequipFocused(),
+            q: () => ontab('Inventory'),
+            e: () => ontab('Inventory'),
+            // On a tile: X takes the item off, R drops it, F toggles its favourite mark.
+            x: () => unequipFocused(),
             r: () => onTileItem('drop'),
             f: () => onTileItem('favorite'),
             a: () => stepOutfit(-1),
@@ -254,7 +262,24 @@
     onfocusin={onFocusIn}
     style="transform: translate({offsetX}px, {offsetY}px) scale({scale}); width: {CANVAS_WIDTH}px; height: {CANVAS_HEIGHT}px;"
   >
-    <TopBar player={snapshot.player} outfits={snapshot.outfits} onoutfit={onOutfit} />
+    <TopBar player={snapshot.player} active="Character" {ontab}>
+      {#snippet submenu()}
+        <Hotkey key="A" />
+        <div class="outfits">
+          {#each snapshot.outfits.defined as _, index}
+            <button class="outfit" class:active={index === snapshot.outfits.active} onclick={() => onOutfit(index)}>
+              Outfit {index + 1}
+            </button>
+          {/each}
+        </div>
+        <Hotkey key="D" />
+        {#if snapshot.outfits.missing > 0}
+          <p class="missing">
+            {snapshot.outfits.missing === 1 ? '1 item is' : `${snapshot.outfits.missing} items are`} no longer in the inventory
+          </p>
+        {/if}
+      {/snippet}
+    </TopBar>
 
     <main>
       <!-- The arch frames the character; its middle is clear, so the
@@ -316,7 +341,7 @@
       </div>
       <Hotkey key="enter" action="Equip" />
       {#if focusedItem}
-        <Hotkey key="E" action="Unequip" />
+        <Hotkey key="X" action="Unequip" />
         {#if focusedItem.type !== 'spell'}
           <Hotkey key="R" action="Drop" />
           <Hotkey key="F" action="Favourite" />
@@ -345,6 +370,55 @@
 </div>
 
 <style>
+  /* Outfits: the Character screen's submenu in the top bar. */
+  .outfits {
+    display: flex;
+    align-items: center;
+    margin: 0 10px;
+    padding: 0 24px;
+  }
+  .outfit + .outfit {
+    margin-left: 47px;
+  }
+  .outfit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    font-family: var(--font-medium);
+    font-weight: 500;
+    font-size: 24px;
+    line-height: normal;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--muted);
+    border-bottom: 1px solid transparent;
+  }
+  .outfit.active {
+    height: auto;
+    font-size: 28px;
+    color: var(--text);
+    border-bottom-color: var(--text);
+  }
+  .outfit:focus {
+    border-bottom-color: var(--negative);
+  }
+  /* Not in the design: shown when an outfit wanted something that is gone. */
+  .missing {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    margin: 6px 0 0;
+    text-align: center;
+    font-family: var(--font-condensed);
+    font-weight: 500;
+    font-size: 18px;
+    line-height: normal;
+    white-space: nowrap;
+    color: var(--negative);
+  }
+
   .viewport {
     position: fixed;
     top: 0;
@@ -364,7 +438,9 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: 40px;
+    /* Top 32 as in the Inventory design, so the shared header sits in the same
+       place on both tabs; main is 8 px further down to keep its own spot. */
+    padding: 32px 40px 40px;
   }
 
   main {
@@ -374,7 +450,7 @@
     justify-content: space-between;
     width: 100%;
     height: 1186px;
-    margin-top: 45px;
+    margin-top: 53px;
   }
   /* Design: 1095 x 1248 frame at x 666 of the main row, the drawing inset by
      about a pixel; it runs past the bottom of the row, behind the lower tiles. */
