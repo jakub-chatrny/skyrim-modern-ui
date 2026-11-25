@@ -19,7 +19,7 @@
     "noFog": true,
     "itemPictures": true,
     "studioLights": true,
-    "lightStrength": 0.9,
+    "lightStrength": 0.8,
     "lightRadius": 600
   }
 }
