@@ -119,6 +119,11 @@ namespace
 		if (entry && type != "ammo") {
 			stats.push_back(Stat("Weight", Number(entry->GetWeight(), 1)));
 		}
+		if (entry) {
+			if (const auto value = entry->GetValue(); value > 0) {
+				stats.push_back(Stat("Value", std::to_string(value)));
+			}
+		}
 
 		// Enchantment, as the inventory describes it: the player's own
 		// enchantment on this copy first, else the item's built-in one.
@@ -521,6 +526,11 @@ json Snapshot::Build()
 		{ "picturesPending", Thumbnails::Pending() },
 		{ "effects", ActiveEffects(player) },
 	};
+	json dropping = json::array();
+	for (const auto id : Equipment::QueuedDrops()) {
+		dropping.push_back(std::format("0x{:08X}", id));
+	}
+	snapshot["dropping"] = std::move(dropping);
 	if (auto survival = Survival(); !survival.is_null()) {
 		snapshot["survival"] = std::move(survival);
 	}
@@ -536,6 +546,7 @@ json Snapshot::BuildItemList(Equipment::Slot a_slot)
 		auto entry = SlotItem(a_slot, item);
 		entry["count"] = item.count;
 		entry["equipped"] = item.form == candidates.equipped;
+		entry["favorite"] = item.entry && item.entry->IsFavorited();
 		items.push_back(std::move(entry));
 	}
 

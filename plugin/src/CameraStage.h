@@ -26,6 +26,9 @@ namespace CameraStage
 		bool  blackFog = true;            // fog colours set to black while open
 		bool  noFog = true;               // outdoors: weather fog switched off while open
 		bool  hideHud = true;     // hide the vanilla HUD (compass, crosshair, bars) while open
+		bool  studioLights = true;  // light the character evenly, whatever the weather or time
+		float lightStrength = 0.9f; // key light brightness; the fill light is a little under half of it
+		float lightRadius = 600.0f; // how far the lights reach, game units
 		bool  faceOpenSpace = true;  // turn the player toward open space when a wall would pull the camera in
 		bool  pauseGame = false;  // paused = frozen pose; unpaused = animated, world keeps running
 		float distance = 260.0f;  // camera distance from the player, game units

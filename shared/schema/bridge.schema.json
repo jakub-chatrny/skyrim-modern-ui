@@ -293,6 +293,13 @@
               }
             }
           }
+        },
+        "dropping": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Form ids of items queued to be dropped when the screen closes, one entry per copy."
         }
       }
     },
@@ -507,6 +514,26 @@
               "type": "string"
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "formId"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "drop",
+                "favorite"
+              ],
+              "description": "drop: one of the item onto the ground; favorite: toggle its favourite mark."
+            },
+            "formId": {
+              "type": "string"
+            }
+          }
         }
       ]
     },
@@ -617,6 +644,10 @@
             "null"
           ],
           "description": "What the item's enchantment does, as the inventory describes it; null when it has none."
+        },
+        "favorite": {
+          "type": "boolean",
+          "description": "Marked as a favourite in the game's inventory."
         }
       }
     },

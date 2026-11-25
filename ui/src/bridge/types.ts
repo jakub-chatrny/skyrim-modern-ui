@@ -45,6 +45,8 @@ export interface SlotItem {
 export interface InventoryItem extends SlotItem {
   count: number
   equipped: boolean
+  /** Marked as a favourite in the game; older plugins do not send it. */
+  favorite?: boolean
 }
 
 /** The plugin's answer to a `listItems` command. */
@@ -121,6 +123,8 @@ export interface Snapshot {
   picturesPending: number
   /** Older plugins do not send it. */
   effects?: ActiveEffect[]
+  /** Items queued to drop when the screen closes, one form id per copy. */
+  dropping?: string[]
 }
 
 export type Command =
@@ -130,6 +134,8 @@ export type Command =
   | { type: 'unequip'; slot: SlotId }
   | { type: 'listItems'; slot: SlotId }
   | { type: 'switchOutfit'; index: number }
+  | { type: 'drop'; formId: string }
+  | { type: 'favorite'; formId: string }
 
 export interface Bridge {
   /** True when no game is attached and data comes from the fixture. */

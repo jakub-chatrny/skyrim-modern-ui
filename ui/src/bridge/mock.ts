@@ -66,6 +66,8 @@ const SPARE: Partial<Record<SlotId, [SlotItem, number][]>> = {
 export function createMockGame(fixture: Snapshot, { onSnapshot, onItems }: BridgeHandlers) {
   const state = clone(fixture)
 
+  const favourites = new Set<string>()
+
   // Everything the mock player owns, per slot: equipped fixture items plus the spares.
   const owned = new Map<SlotId, Map<string, [SlotItem, number]>>()
   const own = (slot: SlotId, entry: SlotItem, count: number) => {
@@ -105,7 +107,12 @@ export function createMockGame(fixture: Snapshot, { onSnapshot, onItems }: Bridg
         case 'listItems': {
           const equippedId = state.equipment[command.slot]?.formId
           const items: InventoryItem[] = [...(owned.get(command.slot)?.values() ?? [])]
-            .map(([entry, count]) => ({ ...entry, count, equipped: entry.formId === equippedId }))
+            .map(([entry, count]) => ({
+              ...entry,
+              count,
+              equipped: entry.formId === equippedId,
+              favorite: favourites.has(entry.formId),
+            }))
             .sort((a, b) => a.name.localeCompare(b.name))
           // Answer a moment later, like the real round trip.
           setTimeout(() => onItems({ slot: command.slot, items: clone(items) }), 30)
@@ -121,6 +128,19 @@ export function createMockGame(fixture: Snapshot, { onSnapshot, onItems }: Bridg
               defined: state.outfits.defined.map((was, i) => was || i === command.index),
               missing: 0,
             }
+          }
+          push()
+          break
+        }
+        case 'favorite':
+          if (!favourites.delete(command.formId)) favourites.add(command.formId)
+          push()
+          break
+        case 'drop': {
+          // Queued, as in game: the drop happens when the screen closes.
+          state.dropping = [...(state.dropping ?? []), command.formId]
+          for (const slot of Object.keys(state.equipment) as SlotId[]) {
+            if (state.equipment[slot]?.formId === command.formId) state.equipment[slot] = null
           }
           push()
           break

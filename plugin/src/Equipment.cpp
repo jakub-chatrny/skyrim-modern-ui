@@ -355,3 +355,193 @@ std::size_t Equipment::Apply(const FormSet& a_wanted)
 	}
 	return missing;
 }
+
+namespace
+{
+	// The game's own inventory entry for a form (not a copy), and the extra
+	// data list of its worn copy, else its first one, else none.
+	std::pair<RE::InventoryEntryData*, RE::ExtraDataList*> LiveEntry(RE::PlayerCharacter* a_player, RE::FormID a_formID)
+	{
+		auto* changes = a_player->GetInventoryChanges();
+		if (!changes || !changes->entryList) {
+			return {};
+		}
+		for (auto* entry : *changes->entryList) {
+			if (!entry || !entry->object || entry->object->GetFormID() != a_formID) {
+				continue;
+			}
+			RE::ExtraDataList* chosen = nullptr;
+			if (entry->extraLists) {
+				for (auto* list : *entry->extraLists) {
+					if (!list) {
+						continue;
+					}
+					if (!chosen) {
+						chosen = list;
+					}
+					if (list->HasType(RE::ExtraDataType::kWorn) || list->HasType(RE::ExtraDataType::kWornLeft)) {
+						chosen = list;
+						break;
+					}
+				}
+			}
+			return { entry, chosen };
+		}
+		return {};
+	}
+}
+
+namespace
+{
+	// Drops wait for the screen to close. Dropped while it is open (world
+	// hidden, a worn copy still attached), the item crashed the game or never
+	// showed up; afterwards it lands at the player's feet like any drop.
+	struct PendingDrop
+	{
+		RE::FormID formID = 0;
+		int        attempts = 0;
+	};
+	std::vector<PendingDrop> pendingDrops;
+	int                      dropWait = 0;  // frames left after the screen closed
+	constexpr int            DROP_DELAY_FRAMES = 15;
+	constexpr int            DROP_ATTEMPTS = 3;
+
+	bool IsWorn(const RE::ExtraDataList* a_list)
+	{
+		return a_list && (a_list->HasType(RE::ExtraDataType::kWorn) || a_list->HasType(RE::ExtraDataType::kWornLeft));
+	}
+
+	// How many the player has (the entry's own count is only the change from
+	// the base container).
+	std::int32_t Count(RE::PlayerCharacter* a_player, RE::TESBoundObject* a_object)
+	{
+		const auto counts = a_player->GetInventoryCounts([&](RE::TESBoundObject& a_candidate) { return &a_candidate == a_object; });
+		const auto it = counts.find(a_object);
+		return it != counts.end() ? it->second : 0;
+	}
+
+	// The extra data list of a copy that is not worn, or null for a plain copy;
+	// false when every copy is still worn.
+	bool UnwornCopy(RE::InventoryEntryData* a_entry, std::int32_t a_count, RE::ExtraDataList*& a_list)
+	{
+		a_list = nullptr;
+		std::int32_t withLists = 0;
+		if (a_entry->extraLists) {
+			for (auto* list : *a_entry->extraLists) {
+				if (!list) {
+					continue;
+				}
+				withLists += list->GetCount();
+				if (!IsWorn(list) && !a_list) {
+					a_list = list;
+				}
+			}
+		}
+		// Copies without an extra data list are never worn.
+		return a_list || a_count > withLists;
+	}
+
+	std::int32_t Queued(RE::FormID a_formID)
+	{
+		return static_cast<std::int32_t>(std::ranges::count_if(pendingDrops, [&](const PendingDrop& a_drop) { return a_drop.formID == a_formID; }));
+	}
+}
+
+bool Equipment::Drop(RE::FormID a_formID)
+{
+	auto* player = RE::PlayerCharacter::GetSingleton();
+	auto* object = RE::TESForm::LookupByID<RE::TESBoundObject>(a_formID);
+	if (!object || object->Is(RE::FormType::Spell)) {
+		logger::info("Drop {:#010x}: not an item", a_formID);
+		return false;
+	}
+	const auto [entry, list] = LiveEntry(player, a_formID);
+	if (!entry) {
+		logger::info("Drop {:#010x}: not in the inventory", a_formID);
+		return false;
+	}
+	// The game refuses to drop quest items too.
+	if (entry->IsQuestObject()) {
+		logger::info("Drop {:#010x}: quest item, kept", a_formID);
+		return false;
+	}
+	const auto count = Count(player, object);
+	if (Queued(a_formID) >= count) {
+		logger::info("Drop {:#010x}: all {} already queued", a_formID, count);
+		return false;
+	}
+	// When the next copy to go is worn, take it off now; the drop itself waits.
+	RE::ExtraDataList* unworn = nullptr;
+	if (!UnwornCopy(entry, count - Queued(a_formID), unworn) && IsWorn(list)) {
+		RE::ActorEquipManager::GetSingleton()->UnequipObject(player, object, list, 1, nullptr, false, false, true, true);
+		logger::info("Drop: {} ({:#010x}) taken off", object->GetName(), a_formID);
+	}
+	pendingDrops.push_back({ a_formID, 0 });
+	logger::info("Drop: {} ({:#010x}) queued until the screen closes", object->GetName(), a_formID);
+	return true;
+}
+
+bool Equipment::TickDrops(bool a_screenOpen)
+{
+	if (a_screenOpen || pendingDrops.empty()) {
+		dropWait = DROP_DELAY_FRAMES;
+		return false;
+	}
+	if (--dropWait > 0) {
+		return false;
+	}
+
+	auto* player = RE::PlayerCharacter::GetSingleton();
+	std::vector<PendingDrop> retry;
+	for (auto& drop : pendingDrops) {
+		auto* object = RE::TESForm::LookupByID<RE::TESBoundObject>(drop.formID);
+		const auto [entry, list] = player && object ? LiveEntry(player, drop.formID) : std::pair<RE::InventoryEntryData*, RE::ExtraDataList*>{};
+		if (!entry) {
+			logger::info("Drop {:#010x}: no longer in the inventory", drop.formID);
+			continue;
+		}
+		RE::ExtraDataList* unworn = nullptr;
+		if (!UnwornCopy(entry, Count(player, object), unworn)) {
+			if (++drop.attempts < DROP_ATTEMPTS) {
+				RE::ActorEquipManager::GetSingleton()->UnequipObject(player, object, list, 1, nullptr, false, false, true, true);
+				retry.push_back(drop);
+			} else {
+				logger::warn("Drop {:#010x}: still worn after {} tries, kept", drop.formID, DROP_ATTEMPTS);
+			}
+			continue;
+		}
+		player->RemoveItem(object, 1, RE::ITEM_REMOVE_REASON::kDropping, unworn, nullptr);
+		logger::info("Drop: {} ({:#010x}) dropped", object->GetName(), drop.formID);
+	}
+	pendingDrops = std::move(retry);
+	dropWait = DROP_DELAY_FRAMES;
+	return true;
+}
+
+std::vector<RE::FormID> Equipment::QueuedDrops()
+{
+	std::vector<RE::FormID> ids;
+	for (const auto& drop : pendingDrops) {
+		ids.push_back(drop.formID);
+	}
+	return ids;
+}
+
+bool Equipment::ToggleFavorite(RE::FormID a_formID)
+{
+	auto* player = RE::PlayerCharacter::GetSingleton();
+	auto* changes = player->GetInventoryChanges();
+	const auto [entry, list] = LiveEntry(player, a_formID);
+	if (!changes || !entry) {
+		logger::info("Favourite {:#010x}: not in the inventory", a_formID);
+		return false;
+	}
+	const bool was = entry->IsFavorited();
+	if (was) {
+		changes->RemoveFavorite(entry, list);
+	} else {
+		changes->SetFavorite(entry, list);
+	}
+	logger::info("Favourite: {} ({:#010x}) {}", entry->object->GetName(), a_formID, was ? "cleared" : "set");
+	return true;
+}

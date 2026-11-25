@@ -17,6 +17,9 @@
     "backdropHeight": 70,
     "backdropScale": 10,
     "noFog": true,
-    "itemPictures": true
+    "itemPictures": true,
+    "studioLights": true,
+    "lightStrength": 0.9,
+    "lightRadius": 600
   }
 }

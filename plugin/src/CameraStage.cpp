@@ -406,6 +406,88 @@ namespace
 		backdropParent.reset();
 	}
 
+	// Studio lights. The character is lit by the world (weather, time of day,
+	// where they stand), so at night or indoors they come out dark. While the
+	// screen is open two point lights hang in front of them, a warm key light
+	// high on one side and a cooler, weaker fill on the other, attached to the
+	// player's 3D like the backdrop and restricted to it, so nothing else is lit.
+	RE::NiPointer<RE::NiNode>                studioParent;
+	std::vector<RE::NiPointer<RE::NiPointLight>> studioLights;
+
+	void AttachLights(RE::PlayerCharacter* a_player, const CameraStage::Config& a_config)
+	{
+		auto* root = a_player->Get3D(false);
+		auto* parent = root ? root->AsNode() : nullptr;
+		auto* scene = RE::BSShaderManager::State::GetSingleton().shadowSceneNode[0];
+		if (!parent || !scene) {
+			logger::warn("Lights: no player 3D or scene to light");
+			return;
+		}
+
+		struct Spec
+		{
+			RE::NiPoint3 position;  // player space: +Y toward the camera, +Z up
+			RE::NiColor  color;
+			float        strength;
+		};
+		const float k = a_config.lightStrength;
+		const Spec  specs[]{
+            { { -70.0f, 130.0f, 160.0f }, { 1.0f, 0.95f, 0.88f }, k },         // key: front left, above the head
+            { { 90.0f, 110.0f, 80.0f }, { 0.78f, 0.86f, 1.0f }, k * 0.45f },  // fill: front right, chest height
+		};
+
+		RE::ShadowSceneNode::LIGHT_CREATE_PARAMS params{};
+		params.dynamic = true;
+		params.shadowLight = false;
+		params.portalStrict = false;
+		params.affectLand = false;
+		params.affectWater = false;
+		params.neverFades = true;
+		params.fov = 0.0f;
+		params.falloff = 1.0f;
+		params.nearDistance = 5.0f;
+		params.depthBias = 0.0f;
+		params.sceneGraphIndex = 0;
+		params.restrictedNode = parent;  // only the player is lit
+		params.lensFlareData = nullptr;
+
+		for (const auto& spec : specs) {
+			auto* light = RE::NiPointLight::Create();
+			if (!light) {
+				continue;
+			}
+			auto& data = light->GetLightRuntimeData();
+			data.ambient = RE::NiColor(0.0f, 0.0f, 0.0f);
+			data.diffuse = spec.color;
+			data.radius = RE::NiPoint3(a_config.lightRadius, a_config.lightRadius, a_config.lightRadius);
+			data.fade = spec.strength;
+			light->SetLightAttenuation(a_config.lightRadius);
+			light->local.translate = spec.position;
+			parent->AttachChild(light, true);
+			scene->AddLight(light, params);
+			studioLights.emplace_back(light);
+		}
+		studioParent.reset(parent);
+		RE::NiUpdateData update{};
+		parent->Update(update);
+		logger::info("Lights: {} studio light(s), strength {}, radius {}", studioLights.size(), k, a_config.lightRadius);
+	}
+
+	void DetachLights()
+	{
+		auto* scene = RE::BSShaderManager::State::GetSingleton().shadowSceneNode[0];
+		for (auto& light : studioLights) {
+			if (scene) {
+				scene->RemoveLight(light.get());
+			}
+			if (studioParent) {
+				studioParent->DetachChild2(light.get());
+			}
+		}
+		studioLights.clear();
+		studioParent.reset();
+	}
+
 	bool worldHidden = false;
 
 	void HideWorld(RE::PlayerCharacter* a_player, bool a_blackFog, bool a_noFog)
@@ -490,6 +572,9 @@ CameraStage::Config CameraStage::LoadConfig()
 	config.blackFog = flag("blackFog", config.blackFog);
 	config.noFog = flag("noFog", config.noFog);
 	config.hideHud = flag("hideHud", config.hideHud);
+	config.studioLights = flag("studioLights", config.studioLights);
+	config.lightStrength = num("lightStrength", config.lightStrength);
+	config.lightRadius = num("lightRadius", config.lightRadius);
 	config.faceOpenSpace = flag("faceOpenSpace", config.faceOpenSpace);
 	config.pauseGame = flag("pauseGame", config.pauseGame);
 	config.distance = num("distance", config.distance);
@@ -714,6 +799,9 @@ bool CameraStage::Enter(const Config& a_config)
 	if (a_config.backdrop) {
 		AttachBackdrop(player, a_config);
 	}
+	if (a_config.studioLights) {
+		AttachLights(player, a_config);
+	}
 	if (a_config.hideHud) {
 		SetHudHidden(true);
 	}
@@ -731,6 +819,7 @@ void CameraStage::Leave()
 	saved.active = false;
 
 	DetachBackdrop();
+	DetachLights();
 	ShowWorld();
 	SetHudHidden(false);
 
@@ -828,5 +917,6 @@ bool CameraStage::IsActive()
 
 bool CameraStage::IsOwnNode(const RE::NiAVObject* a_object)
 {
-	return std::ranges::any_of(backdropPlanes, [&](const auto& a_plane) { return a_plane.get() == a_object; });
+	return std::ranges::any_of(backdropPlanes, [&](const auto& a_plane) { return a_plane.get() == a_object; }) ||
+	       std::ranges::any_of(studioLights, [&](const auto& a_light) { return a_light.get() == a_object; });
 }

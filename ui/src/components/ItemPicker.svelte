@@ -3,6 +3,7 @@
   // in the Figma file yet; it reuses the tile and panel styles of the screen.
   import type { InventoryItem, SlotId, SlotItem } from '../bridge/types'
   import { itemStatIcon } from '../lib/icons'
+  import Hotkey from './Hotkey.svelte'
   import ItemArt from './ItemArt.svelte'
 
   let {
@@ -11,6 +12,7 @@
     icon,
     current,
     items,
+    dropping = [],
     x,
     y,
     element = $bindable(),
@@ -26,6 +28,8 @@
     current: SlotItem | null
     /** null while the plugin's answer is on its way. */
     items: InventoryItem[] | null
+    /** Form ids queued to drop when the screen closes, one per copy. */
+    dropping?: string[]
     /** Top-left corner, in canvas pixels. */
     x: number
     y: number
@@ -34,6 +38,22 @@
     onunequip: () => void
     onclose: () => void
   } = $props()
+
+  // Favourites first, then the best by the slot's main stat (Armor, else
+  // Damage), then by name; spells stay after the items.
+  const mainStat = $derived(slot === 'leftHand' || slot === 'rightHand' || slot === 'ranged' || slot === 'ammo' ? 'Damage' : 'Armor')
+  const sorted = $derived(
+    items === null
+      ? null
+      : [...items].sort((a, b) => {
+          const spell = Number(a.type === 'spell') - Number(b.type === 'spell')
+          if (spell) return spell
+          const favourite = Number(!!b.favorite) - Number(!!a.favorite)
+          if (favourite) return favourite
+          const stat = statValue(b.stats, mainStat) - statValue(a.stats, mainStat)
+          return stat || a.name.localeCompare(b.name)
+        }),
+  )
 
   // Armor and damage compared with what the slot holds now: "+4", "−2", or
   // nothing when equal or this is the equipped item. An item without the stat
@@ -79,11 +99,12 @@
     {:else if items.length === 0}
       <p class="note">Nothing in the inventory fits here.</p>
     {:else}
-      {#each items as item (item.formId)}
-        <button class="row" class:equipped={item.equipped} onclick={() => onpick(item)}>
+      {#each sorted ?? [] as item (item.formId)}
+        {@const leaving = dropping.filter((id) => id === item.formId).length}
+        <button class="row" class:equipped={item.equipped} data-form-id={item.type === 'spell' ? undefined : item.formId} onclick={() => onpick(item)}>
           <span class="art"><ItemArt {slot} {item} /></span>
           <span class="text">
-            <span class="name">{item.name}</span>
+            <span class="name">{#if item.favorite}<svg class="favourite" width="16" height="16" viewBox="0 0 24 24" aria-label="Favourite"><path d="M12 2.5L14.9 8.6L21.5 9.4L16.6 13.9L17.9 20.5L12 17.2L6.1 20.5L7.4 13.9L2.5 9.4L9.1 8.6Z" fill="#D8C38E" /></svg>{/if}{item.name}</span>
             <span class="stats">
               {#each item.stats.slice(0, 4) as stat}
                 {@const change = COMPARED.includes(stat.label) ? delta(item, stat.label) : null}
@@ -106,11 +127,16 @@
           </span>
           <span class="side">
             {#if item.equipped}<span class="tag">Equipped</span>{/if}
+            {#if leaving}<span class="tag dropping">Dropping{leaving > 1 ? ` ×${leaving}` : ''}</span>{/if}
             {#if item.count > 1}<span class="count">×{item.count}</span>{/if}
           </span>
         </button>
       {/each}
     {/if}
+  </div>
+  <div class="keys">
+    <Hotkey key="R" action="Drop" />
+    <Hotkey key="F" action="Favourite" />
   </div>
 </div>
 
@@ -301,5 +327,22 @@
     font-size: 15px;
     line-height: normal;
     color: var(--accent);
+  }
+  .favourite {
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: -1px;
+  }
+  .keys {
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    margin-top: 12px;
+  }
+  .keys > :global(* + *) {
+    margin-left: 10px;
+  }
+  .tag.dropping {
+    color: var(--negative);
   }
 </style>

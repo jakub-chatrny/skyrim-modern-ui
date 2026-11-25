@@ -157,6 +157,22 @@ namespace
 				} else {
 					Equipment::Equip(formID, Equipment::SlotFromName(command.value("slot", "")));
 				}
+			} else if (type == "drop" || type == "favorite") {
+				// formId arrives as "0x0001397E".
+				const auto id = command.value("formId", "");
+				RE::FormID formID = 0;
+				const auto [end, error] = std::from_chars(id.data() + (id.starts_with("0x") ? 2 : 0), id.data() + id.size(), formID, 16);
+				if (error != std::errc{} || end != id.data() + id.size()) {
+					logger::warn("{}: bad formId in {}", type, text);
+				} else if (type == "drop" ? Equipment::Drop(formID) : Equipment::ToggleFavorite(formID)) {
+					// Neither fires an equip event every time (a favourite never
+					// does), so answer with fresh data on the next task run.
+					SKSE::GetTaskInterface()->AddTask([]() {
+						if (isOpen) {
+							PushSnapshot();
+						}
+					});
+				}
 			} else if (type == "listItems") {
 				const auto slot = Equipment::SlotFromName(command.value("slot", ""));
 				if (!slot) {
@@ -211,6 +227,7 @@ namespace
 			// The input manager calls its sinks every frame, events or not, which makes
 			// this the plugin's per-frame hook.
 			CameraStage::Tick();
+			Equipment::TickDrops(isOpen);
 			if (isOpen) {
 				// When new item pictures are saved, tell the page where they are.
 				Thumbnails::Tick([]() { PushSnapshot(); });
@@ -269,9 +286,11 @@ namespace
 			case 0x10: name = "q"; break;
 			case 0x11: name = "w"; break;
 			case 0x12: name = "e"; break;
+			case 0x13: name = "r"; break;
 			case 0x1E: name = "a"; break;
 			case 0x1F: name = "s"; break;
 			case 0x20: name = "d"; break;
+			case 0x21: name = "f"; break;
 			case 0x1C: name = "enter"; break;
 			case 0x39: name = " "; break;
 			case 0xC8: name = "arrowup"; break;

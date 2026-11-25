@@ -76,4 +76,14 @@ namespace Equipment
 	// Both return false, after logging why, when nothing was done.
 	bool Unequip(Slot a_slot);
 	bool Equip(RE::FormID a_formID, std::optional<Slot> a_slot);
+
+	// Queues one of the item to be dropped at the player's feet once the screen
+	// closes; a worn copy is taken off at once.
+	bool Drop(RE::FormID a_formID);
+	// Once per frame: carries out queued drops a moment after the screen closed.
+	bool TickDrops(bool a_screenOpen);
+	// Form ids of the queued drops, one per copy.
+	[[nodiscard]] std::vector<RE::FormID> QueuedDrops();
+	// Marks the item as a favourite in the game's inventory, or clears the mark.
+	bool ToggleFavorite(RE::FormID a_formID);
 }

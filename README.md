@@ -38,11 +38,14 @@ Start the game through SKSE, load a save, press **F4**.
 | Key | Does |
 |---|---|
 | F4 | Open and close the screen (Esc is left to the game) |
-| W / S, arrow keys, mouse | Move the selection |
+| W / S, arrow keys, mouse | Move the selection (W / S go round the twelve tiles) |
 | Enter, Space, click | Open the item list of the selected slot, pick an item |
 | A / D | Previous / next outfit |
 | 1 – 4 | Outfit 1 to 4 |
-| Q / E | Reserved for the main tabs (nothing yet) |
+| E | Take off the selected tile's item |
+| R | Drop the selected item (on a tile, or the highlighted row of an item list) |
+| F | Mark or unmark the selected item as a favourite |
+| Q | Reserved for the main tabs (nothing yet) |
 
 Camera framing and other settings are in `Data/SKSE/Plugins/SkyrimModernUI.json`; it is read every time the
 screen opens, so changes need no restart. On Linux the Proton prefix needs a current Visual C++ runtime for

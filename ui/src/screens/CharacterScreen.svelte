@@ -167,16 +167,24 @@
       initial: pickerElement ? ['.row.equipped', '.row'] : ['.tile'],
       onShoulder: (step) => console.log(`[ui] shoulder button ${step > 0 ? 'RB' : 'LB'}: no other tab yet`),
       hotkeys: pickerElement
-        ? undefined
+        ? {
+            // In the item list: the highlighted row.
+            r: () => onRow('drop'),
+            f: () => onRow('favorite'),
+          }
         : {
             q: () => console.log('[ui] Q: no other tab yet'),
-            e: () => console.log('[ui] E: no other tab yet'),
+            // On a tile: E takes the item off, R drops it, F toggles its favourite mark.
+            e: () => unequipFocused(),
+            r: () => onTileItem('drop'),
+            f: () => onTileItem('favorite'),
             a: () => stepOutfit(-1),
             d: () => stepOutfit(1),
             // A / D are the outfits, so W / S alone could not reach the bottom
             // row: on a tile they go round the arch instead.
             w: () => stepTile(-1),
             s: () => stepTile(1),
+
             '1': () => onOutfit(0),
             '2': () => onOutfit(1),
             '3': () => onOutfit(2),
@@ -197,6 +205,31 @@
     if (index < 0) return false  // not on a tile: plain up / down
     const next = RING[(index + step + RING.length) % RING.length]
     canvas?.querySelector<HTMLElement>(`[data-slot="${next}"]`)?.focus()
+    return true
+  }
+
+  function unequipFocused(): boolean {
+    const slot = (document.activeElement as HTMLElement | null)?.dataset?.slot as SlotId | undefined
+    if (!slot || !snapshot.equipment[slot]) return false
+    bridge.send({ type: 'unequip', slot })
+    return true
+  }
+
+  function onTileItem(type: 'drop' | 'favorite'): boolean {
+    const slot = (document.activeElement as HTMLElement | null)?.dataset?.slot as SlotId | undefined
+    const item = slot ? snapshot.equipment[slot] : null
+    if (!item || item.type === 'spell') return false
+    bridge.send({ type, formId: item.formId })
+    return true
+  }
+
+  function onRow(type: 'drop' | 'favorite'): boolean {
+    const formId = (document.activeElement as HTMLElement | null)?.dataset?.formId
+    if (!formId || !picker) return false
+    bridge.send({ type, formId })
+    // The list shows counts and stars: ask for it again once the game has changed.
+    const slot = picker.slot
+    setTimeout(() => bridge.send({ type: 'listItems', slot }), 150)
     return true
   }
 
@@ -282,6 +315,13 @@
         {/if}
       </div>
       <Hotkey key="enter" action="Equip" />
+      {#if focusedItem}
+        <Hotkey key="E" action="Unequip" />
+        {#if focusedItem.type !== 'spell'}
+          <Hotkey key="R" action="Drop" />
+          <Hotkey key="F" action="Favourite" />
+        {/if}
+      {/if}
       <Hotkey key="F4" action="Close" />
     </footer>
 
@@ -292,6 +332,7 @@
         icon={slotIcons[picker.slot]}
         current={snapshot.equipment[picker.slot]}
         items={pickerItems}
+        dropping={snapshot.dropping ?? []}
         x={picker.x}
         y={picker.y}
         bind:element={pickerElement}
