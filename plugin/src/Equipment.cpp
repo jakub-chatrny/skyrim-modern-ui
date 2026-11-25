@@ -421,12 +421,12 @@ namespace
 	}
 
 	// The extra data list of a copy that is not worn, or null for a plain copy;
-	// false when every copy is still worn.
+	// false when every copy is still worn. No entry means plain copies only.
 	bool UnwornCopy(RE::InventoryEntryData* a_entry, std::int32_t a_count, RE::ExtraDataList*& a_list)
 	{
 		a_list = nullptr;
 		std::int32_t withLists = 0;
-		if (a_entry->extraLists) {
+		if (a_entry && a_entry->extraLists) {
 			for (auto* list : *a_entry->extraLists) {
 				if (!list) {
 					continue;
@@ -455,17 +455,19 @@ bool Equipment::Drop(RE::FormID a_formID)
 		logger::info("Drop {:#010x}: not an item", a_formID);
 		return false;
 	}
-	const auto [entry, list] = LiveEntry(player, a_formID);
-	if (!entry) {
+	// Items from the character's own starting inventory have no entry unless
+	// something about them changed (worn, enchanted, ...), so count instead.
+	const auto count = Count(player, object);
+	if (count <= 0) {
 		logger::info("Drop {:#010x}: not in the inventory", a_formID);
 		return false;
 	}
+	const auto [entry, list] = LiveEntry(player, a_formID);
 	// The game refuses to drop quest items too.
-	if (entry->IsQuestObject()) {
+	if (entry && entry->IsQuestObject()) {
 		logger::info("Drop {:#010x}: quest item, kept", a_formID);
 		return false;
 	}
-	const auto count = Count(player, object);
 	if (Queued(a_formID) >= count) {
 		logger::info("Drop {:#010x}: all {} already queued", a_formID, count);
 		return false;
@@ -495,13 +497,15 @@ bool Equipment::TickDrops(bool a_screenOpen)
 	std::vector<PendingDrop> retry;
 	for (auto& drop : pendingDrops) {
 		auto* object = RE::TESForm::LookupByID<RE::TESBoundObject>(drop.formID);
-		const auto [entry, list] = player && object ? LiveEntry(player, drop.formID) : std::pair<RE::InventoryEntryData*, RE::ExtraDataList*>{};
-		if (!entry) {
+		const auto count = player && object ? Count(player, object) : 0;
+		if (count <= 0) {
 			logger::info("Drop {:#010x}: no longer in the inventory", drop.formID);
 			continue;
 		}
+		// No entry is fine: a plain copy from the starting inventory.
+		const auto [entry, list] = LiveEntry(player, drop.formID);
 		RE::ExtraDataList* unworn = nullptr;
-		if (!UnwornCopy(entry, Count(player, object), unworn)) {
+		if (!UnwornCopy(entry, count, unworn)) {
 			if (++drop.attempts < DROP_ATTEMPTS) {
 				RE::ActorEquipManager::GetSingleton()->UnequipObject(player, object, list, 1, nullptr, false, false, true, true);
 				retry.push_back(drop);
