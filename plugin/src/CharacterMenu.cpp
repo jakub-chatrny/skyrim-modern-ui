@@ -10,6 +10,7 @@
 #include "Outfits.h"
 #include "Thumbnails.h"
 #include "PrismaUI_API.h"
+#include "Quests.h"
 #include "Snapshot.h"
 
 namespace
@@ -303,6 +304,25 @@ namespace
 				CameraStage::TurnCharacter(command.value("degrees", 0.0f) * std::numbers::pi_v<float> / 180.0f);
 			} else if (type == "turn") {
 				Thumbnails::TurnPreview(command.value("degrees", 0.0f));
+			} else if (type == "listQuests") {
+				const auto payload = nlohmann::json(Quests::Build().dump()).dump();
+				const auto script = "window.smuiQuests && window.smuiQuests(" + payload + ")";
+				prisma->Invoke(view, script.c_str());
+			} else if (type == "trackQuest") {
+				const auto id = command.value("questId", "");
+				RE::FormID formID = 0;
+				std::from_chars(id.data() + (id.starts_with("0x") ? 2 : 0), id.data() + id.size(), formID, 16);
+				Quests::ToggleTracked(formID);
+			} else if (type == "showMap") {
+				// The game's own map: close this screen first, then open it.
+				if (isOpen) {
+					Toggle("show on map");
+				}
+				if (!isOpen) {
+					if (auto* queue = RE::UIMessageQueue::GetSingleton()) {
+						queue->AddMessage(RE::MapMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kShow, nullptr);
+					}
+				}
 			} else if (type == "listInventory") {
 				const auto payload = nlohmann::json(Snapshot::BuildInventory().dump()).dump();
 				const auto script = "window.smuiInventory && window.smuiInventory(" + payload + ")";
@@ -429,6 +449,8 @@ namespace
 			case 0x2D: name = "x"; break;
 			case 0x2C: name = "z"; break;
 			case 0x2E: name = "c"; break;
+			case 0x14: name = "t"; break;
+			case 0x32: name = "m"; break;
 			case 0x1C: name = "enter"; break;
 			case 0x39: name = " "; break;
 			case 0xC8: name = "arrowup"; break;

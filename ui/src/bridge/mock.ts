@@ -2,7 +2,7 @@
 // It answers the same commands the plugin does, from the fixture plus a few
 // invented inventory items, so the whole screen can be developed without Skyrim.
 import type { BridgeHandlers } from './index'
-import type { Command, InventoryEntry, InventoryItem, SlotId, SlotItem, Snapshot } from './types'
+import type { Command, InventoryEntry, InventoryItem, Quest, SlotId, SlotItem, Snapshot } from './types'
 
 // structuredClone is not guaranteed in Ultralight's WebKit; keep one way of copying.
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
@@ -118,7 +118,47 @@ const statNumber = (entry: SlotItem, label: string) => {
   return stat ? Number(stat.value) : undefined
 }
 
-export function createMockGame(fixture: Snapshot, { onSnapshot, onItems, onInventory }: BridgeHandlers) {
+// The quests of the Quests / Iter 1 design.
+const one = (text: string): Quest['objectives'] => [{ text, state: 'active' }]
+const QUESTS: Quest[] = [
+  { id: '0x0002610C', name: 'Bleak Falls Barrow', type: 'main', tracked: true, completed: false,
+    objectives: one('Retrieve the Dragonstone'), journal: ['Farengar wants me to fetch a Dragonstone from Bleak Falls Barrow.'] },
+  { id: '0x0001EA5F', name: 'Take Up Arms', type: 'companions', tracked: false, completed: false,
+    objectives: one('Talk to Kodlak Whitemane'), journal: ['I have joined the Companions.'] },
+  { id: '0x0001F258', name: 'First Lessons', type: 'college', tracked: false, completed: false,
+    objectives: one('Attend Tolfdir\'s lesson'), journal: ['I have been admitted to the College of Winterhold.'] },
+  { id: '0x000D7D69', name: 'A Chance Arrangement', type: 'thieves', tracked: false, completed: false,
+    objectives: [{ text: 'Plant Brand-Shei\'s ring', state: 'active' }, { text: 'Steal Madesi\'s ring', state: 'active' }],
+    journal: ['Brynjolf wants me to steal a ring and plant it on Brand-Shei.'] },
+  { id: '0x00023F3F', name: 'The Black Star', type: 'daedric', tracked: false, completed: false,
+    objectives: one('Talk to Nelacar'), journal: ['Azura asked me to find the elf Nelacar.'] },
+  { id: '0x0004D8D6', name: 'A Daedra\'s Best Friend', type: 'daedric', tracked: false, completed: false,
+    objectives: one('Talk to Barbas'), journal: ['A dog named Barbas asked me to follow him.'] },
+  { id: '0x0001BFC3', name: 'The Golden Claw', type: 'side', tracked: true, completed: false,
+    objectives: [
+      { text: 'Return the Golden Claw to Lucan Valerius', state: 'active',
+        target: { name: 'Lucan Valerius', place: 'Riverwood Trader', region: 'Riverwood  ·  Whiterun Hold', metres: 2400, direction: 'South-east' } },
+      { text: 'Retrieve the Golden Claw', state: 'completed' },
+    ],
+    journal: [
+      'I found the golden claw deep inside Bleak Falls Barrow. Lucan Valerius will want it back at the Riverwood Trader, and the markings on its palm seemed to open the great door in the barrow.',
+      'Thieves broke into the Riverwood Trader and took a golden dragon claw. Lucan Valerius asked me to get it back; the thieves were headed for Bleak Falls Barrow.',
+      'Camilla Valerius offered to show me the way to the barrow.',
+    ] },
+  { id: '0x0002BA16', name: 'In My Time of Need', type: 'side', tracked: false, completed: false,
+    objectives: one('Find the Redguard woman'), journal: ['Two Alik\'r warriors are looking for a Redguard woman.'] },
+  { id: '0x0001A0FE', name: 'Forbidden Legend', type: 'side', tracked: false, completed: false,
+    objectives: one('Find Gauldur\'s amulet fragments'), journal: ['I read about the amulet of Gauldur.'] },
+  { id: '0x00079B7A', name: 'Delivery', type: 'misc', tracked: false, completed: false,
+    objectives: [{ text: 'Deliver the note to Faendal', state: 'active' }, { text: 'Talk to Sven', state: 'active' }], journal: [] },
+  { id: '0x00079B7B', name: 'Favors', type: 'misc', tracked: false, completed: false,
+    objectives: [{ text: 'Bring firewood to Hod', state: 'active' }, { text: 'Find Gerdur\'s lost pickaxe', state: 'active' },
+      { text: 'Collect the debt from Ulfberth', state: 'active' }, { text: 'Bring a Sabre Cat tooth to Temba', state: 'active' }], journal: [] },
+  { id: '0x0003372B', name: 'Unbound', type: 'main', tracked: false, completed: true,
+    objectives: [{ text: 'Escape Helgen', state: 'completed' }], journal: ['I escaped from Helgen with Ralof.'] },
+]
+
+export function createMockGame(fixture: Snapshot, { onSnapshot, onItems, onInventory, onQuests }: BridgeHandlers) {
   const state = clone(fixture)
 
   const favourites = new Set<string>()
@@ -238,6 +278,14 @@ export function createMockGame(fixture: Snapshot, { onSnapshot, onItems, onInven
             if (state.equipment[slot]?.formId === command.formId) state.equipment[slot] = null
           }
           push()
+          break
+        }
+        case 'listQuests':
+          setTimeout(() => onQuests({ quests: clone(QUESTS) }), 30)
+          break
+        case 'trackQuest': {
+          const quest = QUESTS.find((q) => q.id === command.questId)
+          if (quest) quest.tracked = !quest.tracked
           break
         }
         case 'listInventory':

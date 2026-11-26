@@ -8,7 +8,8 @@
     size = 24,
     framed = false,
     dashed = false,
-  }: { path: string; color: string; size?: number; framed?: boolean; dashed?: boolean } = $props()
+    grid = 24,
+  }: { path: string; color: string; size?: number; framed?: boolean; dashed?: boolean; grid?: number } = $props()
 
   // "#RRGGBB" at an opacity, for the frame lines.
   function alpha(hex: string, a: number): string {
@@ -22,13 +23,13 @@
     class="frame"
     style="width: {size}px; height: {size}px; border-color: {alpha(color, 0.6)}; outline-color: {alpha(color, 0.22)}"
   >
-    <svg width={size * 0.56} height={size * 0.56} viewBox="0 0 24 24" fill="none" stroke={color} stroke-width="1.5"
+    <svg width={size * 0.56} height={size * 0.56} viewBox="0 0 {grid} {grid}" fill="none" stroke={color} stroke-width={(1.5 * grid) / 24}
       stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={dashed ? '2 2.2' : 'none'} aria-hidden="true">
       <path d={path} />
     </svg>
   </span>
 {:else}
-  <svg class="bare" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} stroke-width="1.5"
+  <svg class="bare" width={size} height={size} viewBox="0 0 {grid} {grid}" fill="none" stroke={color} stroke-width={(1.5 * grid) / 24}
     stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={dashed ? '2 2.2' : 'none'} aria-hidden="true">
     <path d={path} />
   </svg>

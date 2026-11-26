@@ -10,7 +10,7 @@
   import Hotkey from '../components/Hotkey.svelte'
   import ItemTile from '../components/ItemTile.svelte'
   import StatPill from '../components/StatPill.svelte'
-  import TopBar, { type MainTab } from '../components/TopBar.svelte'
+  import TopBar, { type MainTab, nextTab } from '../components/TopBar.svelte'
   import { CATEGORIES, type CategoryId, categoryGlyph, SORTS, type SortKey, sortItems } from '../lib/inventory'
   import { attachNavigation } from '../lib/navigation'
 
@@ -97,10 +97,10 @@
     if (!canvas) return
     return attachNavigation(canvas, {
       initial: ['.grid .tile'],
-      onShoulder: () => ontab('Character'),
+      onShoulder: (step) => ontab(nextTab('Inventory', step)),
       hotkeys: {
-        q: () => ontab('Character'),
-        e: () => ontab('Character'),
+        q: () => ontab(nextTab('Inventory', -1)),
+        e: () => ontab(nextTab('Inventory', 1)),
         a: () => stepCategory(-1),
         d: () => stepCategory(1),
         r: () => onItem('drop'),

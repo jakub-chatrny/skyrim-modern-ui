@@ -161,6 +161,55 @@ export interface Inventory {
   items: InventoryEntry[]
 }
 
+/** Quest kinds, from the quest record's type. */
+export type QuestType =
+  | 'main'
+  | 'companions'
+  | 'college'
+  | 'thieves'
+  | 'darkBrotherhood'
+  | 'civilWar'
+  | 'dawnguard'
+  | 'dragonborn'
+  | 'daedric'
+  | 'side'
+  | 'misc'
+
+export interface QuestTarget {
+  /** The target's name ("Lucan Valerius"). */
+  name: string
+  /** Where it is ("Riverwood Trader") and the places around that ("Riverwood  ·  Whiterun Hold"). */
+  place?: string
+  region?: string
+  /** From the player, when both are in the same world or cell. */
+  metres?: number
+  direction?: string
+}
+
+export interface QuestObjective {
+  text: string
+  state: 'active' | 'completed' | 'failed'
+  target?: QuestTarget
+}
+
+export interface Quest {
+  id: string
+  name: string
+  type: QuestType
+  /** Shown on the compass (TESQuest::IsActive). */
+  tracked: boolean
+  completed: boolean
+  /** Active first, newest first. */
+  objectives: QuestObjective[]
+  /** Journal entries, newest first. */
+  journal: string[]
+}
+
+/** The plugin's answer to `listQuests`. */
+export interface QuestLog {
+  quests: Quest[]
+}
+
 export type Command =
   | { type: 'ready' }
   | { type: 'close' }
@@ -187,6 +236,11 @@ export type Command =
   | { type: 'turn'; degrees: number }
   /** Turn the character in place on the Character tab; the camera stays. */
   | { type: 'turnCharacter'; degrees: number }
+  | { type: 'listQuests' }
+  /** Track or untrack a quest on the compass. */
+  | { type: 'trackQuest'; questId: string }
+  /** Close the screen and open the game's map. */
+  | { type: 'showMap' }
 
 export interface Bridge {
   /** True when no game is attached and data comes from the fixture. */

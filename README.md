@@ -5,8 +5,8 @@ in the middle, framed by an arch, with equipment, outfits, active effects, survi
 skills around it. The screen is a web page (Svelte) shown in game through [Prisma UI](https://www.prismaui.dev),
 fed by a small SKSE plugin.
 
-**Status: working prototype.** The Character and Inventory tabs work in game; the other tabs in the top bar
-(Map, Quests, Magic, Skills) are placeholders.
+**Status: working prototype.** The Quests, Character and Inventory tabs work in game; the other tabs in the top
+bar (Map, Magic, Skills) are placeholders.
 
 ![The Character screen in game](docs/img/character-screen.jpg)
 
@@ -42,7 +42,7 @@ code); whatever the game did with that key during play moves to F4.
 |---|---|
 | Tab | Open and close the screen (Esc is left to the game) |
 | F4 | The game's own Tab menu |
-| Q / E | Switch between the Character and Inventory tabs |
+| Q / E | Switch tabs (Quests, Character, Inventory) |
 | W / S, arrow keys, mouse | Move the selection (on Character, W / S go round the twelve tiles) |
 | R | Drop the selected item (a tile, a grid item, or the highlighted row of an item list) |
 | F | Mark or unmark the selected item as a favourite |
@@ -56,6 +56,15 @@ Character tab:
 | 1 – 4 | Outfit 1 to 4 |
 | X | Take off the selected tile's item |
 | Drag on the character, Z / C | Turn the character |
+
+Quests tab:
+
+| Key | Does |
+|---|---|
+| A / D | Previous / next category (Active, Main, Factions, Daedric, Side, Misc, Completed) |
+| W / S, arrow keys | Move through the quests |
+| T | Track or untrack the selected quest on the compass |
+| M | Close the screen and open the game's map |
 
 Inventory tab:
 
@@ -76,7 +85,8 @@ Prisma UI: `protontricks 489830 vcrun2022`.
   (or brings the camera closer), but under a low roof edge the game's camera can still end up right at the
   character. Step out from under it before opening the screen.
 - **No gamepad support yet.** Keyboard and mouse only.
-- **Only the Character and Inventory tabs exist.** Map, Quests, Magic and Skills do nothing yet.
+- **Map, Magic and Skills do nothing yet.** Quests, Character and Inventory work.
+- **Show on map** opens the game's map on the player, not on the quest's target yet.
 - **Books cannot be read from the Inventory tab** yet; use the game's own inventory.
 - **Rarity is ours, not the game's.** Items with one enchantment are rare (blue frame), two are epic (purple);
   unique items and Daedric artifacts are legendary (gold).

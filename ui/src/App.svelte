@@ -1,17 +1,19 @@
 <script lang="ts">
   import { connect } from './bridge'
-  import type { Inventory, ItemList, Snapshot } from './bridge/types'
+  import type { Inventory, ItemList, QuestLog, Snapshot } from './bridge/types'
   import type { MainTab } from './components/TopBar.svelte'
   import CharacterScreen from './screens/CharacterScreen.svelte'
   import InventoryScreen from './screens/InventoryScreen.svelte'
+  import QuestsScreen from './screens/QuestsScreen.svelte'
 
   let snapshot = $state<Snapshot | null>(null)
   let itemList = $state<ItemList | null>(null)
   let inventory = $state<Inventory | null>(null)
+  let questLog = $state<QuestLog | null>(null)
   let mock = $state(false)
   // Kept while the screen is closed: it opens on the tab it was left on.
-  // In a browser, index.html#inventory opens on the Inventory tab.
-  let tab = $state<MainTab>(location.hash === '#inventory' ? 'Inventory' : 'Character')
+  // In a browser, index.html#inventory or #quests opens on that tab.
+  let tab = $state<MainTab>(location.hash === '#inventory' ? 'Inventory' : location.hash === '#quests' ? 'Quests' : 'Character')
 
   // The plugin sends a snapshot when a save loads, while the page is still
   // hidden. Lay the page out and decode its pictures then, so the first open
@@ -40,6 +42,9 @@
     onInventory(next) {
       inventory = next
     },
+    onQuests(next) {
+      questLog = next
+    },
   })
 
   function ontab(next: MainTab) {
@@ -52,7 +57,9 @@
 </script>
 
 {#if snapshot}
-  {#if tab === 'Inventory'}
+  {#if tab === 'Quests'}
+    <QuestsScreen {snapshot} log={questLog} {bridge} {mock} {ontab} />
+  {:else if tab === 'Inventory'}
     <InventoryScreen {snapshot} {inventory} {bridge} {mock} {ontab} />
   {:else}
     <CharacterScreen {snapshot} {itemList} {bridge} {mock} {ontab} />

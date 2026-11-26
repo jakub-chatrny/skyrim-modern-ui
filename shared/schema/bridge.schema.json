@@ -633,6 +633,49 @@
               "type": "number"
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "listQuests",
+              "description": "Answered with window.smuiQuests(QuestLog)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "questId"
+          ],
+          "properties": {
+            "type": {
+              "const": "trackQuest",
+              "description": "Track or untrack a quest on the compass."
+            },
+            "questId": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "showMap",
+              "description": "Close the screen and open the game's map."
+            }
+          }
         }
       ]
     },
@@ -920,6 +963,128 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/InventoryEntry"
+          }
+        }
+      }
+    },
+    "QuestTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "place": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "metres": {
+          "type": "number",
+          "description": "From the player, when both are in the same world or cell."
+        },
+        "direction": {
+          "type": "string",
+          "description": "North, North-east, ..."
+        }
+      }
+    },
+    "QuestObjective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "state"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "completed",
+            "failed"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/QuestTarget"
+        }
+      }
+    },
+    "Quest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "type",
+        "tracked",
+        "completed",
+        "objectives",
+        "journal"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "main",
+            "companions",
+            "college",
+            "thieves",
+            "darkBrotherhood",
+            "civilWar",
+            "dawnguard",
+            "dragonborn",
+            "daedric",
+            "side",
+            "misc"
+          ]
+        },
+        "tracked": {
+          "type": "boolean",
+          "description": "Shown on the compass (TESQuest::IsActive)."
+        },
+        "completed": {
+          "type": "boolean"
+        },
+        "objectives": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestObjective"
+          },
+          "description": "Active first, newest first."
+        },
+        "journal": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Journal entries, newest first."
+        }
+      }
+    },
+    "QuestLog": {
+      "description": "The plugin's answer to listQuests.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "quests"
+      ],
+      "properties": {
+        "quests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Quest"
           }
         }
       }

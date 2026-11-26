@@ -1,11 +1,12 @@
 import fixture from '../../../shared/fixtures/character.json'
 import { createMockGame } from './mock'
-import type { Bridge, Command, Inventory, ItemList, Snapshot } from './types'
+import type { Bridge, Command, Inventory, ItemList, QuestLog, Snapshot } from './types'
 
 // Contract with the SKSE plugin (plugin/src/CharacterMenu.cpp):
 //   plugin -> UI : window.smuiReceive(json)   Snapshot as a JSON string
 //   plugin -> UI : window.smuiItems(json)     ItemList, the answer to `listItems`
 //   plugin -> UI : window.smuiInventory(json) Inventory, the answer to `listInventory`
+//   plugin -> UI : window.smuiQuests(json)    QuestLog, the answer to `listQuests`
 //   UI -> plugin : window.smuiCommand(json)   Command as a JSON string
 // Prisma UI injects smuiCommand (RegisterJSListener); outside the game it is
 // missing and a small mock game answers from the fixture instead.
@@ -14,6 +15,7 @@ declare global {
     smuiReceive?: (json: string) => void
     smuiItems?: (json: string) => void
     smuiInventory?: (json: string) => void
+    smuiQuests?: (json: string) => void
     smuiCommand?: (json: string) => void
   }
 }
@@ -27,10 +29,11 @@ export interface BridgeHandlers {
   onSnapshot: (snapshot: Snapshot) => void
   onItems: (list: ItemList) => void
   onInventory: (inventory: Inventory) => void
+  onQuests: (log: QuestLog) => void
 }
 
 export function connect(handlers: BridgeHandlers): Bridge {
-  const { onSnapshot, onItems, onInventory } = handlers
+  const { onSnapshot, onItems, onInventory, onQuests } = handlers
   let received = false
   const mockGame = createMockGame(fixture as Snapshot, handlers)
 
@@ -62,6 +65,12 @@ export function connect(handlers: BridgeHandlers): Bridge {
     const inventory = JSON.parse(json) as Inventory
     console.log(`[bridge] inventory: ${inventory.items.length} item(s)`)
     onInventory(inventory)
+  }
+
+  window.smuiQuests = (json) => {
+    const log = JSON.parse(json) as QuestLog
+    console.log(`[bridge] quests: ${log.quests.length}`)
+    onQuests(log)
   }
 
   bridge.send({ type: 'ready' })

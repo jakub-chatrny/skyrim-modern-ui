@@ -1,5 +1,11 @@
 <script module lang="ts">
-  export type MainTab = 'Character' | 'Inventory'
+  export type MainTab = 'Quests' | 'Character' | 'Inventory'
+
+  // The tabs that exist, in the top bar's order; Q / E step through them.
+  const WORKING: MainTab[] = ['Quests', 'Character', 'Inventory']
+  export function nextTab(from: MainTab, step: -1 | 1): MainTab {
+    return WORKING[(WORKING.indexOf(from) + step + WORKING.length) % WORKING.length]
+  }
 </script>
 
 <script lang="ts">
@@ -19,20 +25,22 @@
     active,
     ontab,
     submenu,
+    status,
   }: {
     player: Snapshot['player']
     active: MainTab
     ontab?: (tab: MainTab) => void
     submenu: Snippet
+    /** Row 2, right: a line about the tab (Quests: "2 tracked · 11 active"). */
+    status?: Snippet
   } = $props()
 
   const carry = $derived(player.carryWeight)
   const carryFraction = $derived(carry.max > 0 ? Math.max(0, Math.min(1, carry.current / carry.max)) : 0)
 
-  // Order from the Inventory design. Only Character and Inventory exist yet;
-  // the other tabs are inert.
+  // Order from the designs. Map, Magic and Skills do not exist yet and are inert.
   const tabs = ['Map', 'Quests', 'Character', 'Inventory', 'Magic', 'Skills']
-  const working = (tab: string): tab is MainTab => tab === 'Character' || tab === 'Inventory'
+  const working = (tab: string): tab is MainTab => (WORKING as string[]).includes(tab)
 
 </script>
 
@@ -87,6 +95,10 @@
   <div class="submenu">
     {@render submenu()}
   </div>
+
+  {#if status}
+    <div class="status">{@render status()}</div>
+  {/if}
 </header>
 
 <style>
@@ -276,6 +288,14 @@
     );
   }
 
+  .status {
+    grid-column: 3;
+    grid-row: 2;
+    align-self: center;
+    justify-self: end;
+    position: relative;
+    z-index: 1;
+  }
   /* Across the whole bar, centred: the submenu's width (outfits or item
      categories) must not move the main tabs above it. */
   .submenu {

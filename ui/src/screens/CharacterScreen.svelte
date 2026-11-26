@@ -20,7 +20,7 @@
   import ItemPicker from '../components/ItemPicker.svelte'
   import LeftPanel from '../components/LeftPanel.svelte'
   import RightPanel from '../components/RightPanel.svelte'
-  import TopBar, { type MainTab } from '../components/TopBar.svelte'
+  import TopBar, { type MainTab, nextTab } from '../components/TopBar.svelte'
   import { itemIcon } from '../lib/icons'
   import { attachNavigation } from '../lib/navigation'
 
@@ -172,7 +172,7 @@
       // The screen opens with the first equipment tile selected, the popup with
       // the equipped item or else its first row.
       initial: pickerElement ? ['.row.equipped', '.row'] : ['.tile'],
-      onShoulder: () => ontab('Inventory'),
+      onShoulder: (step) => ontab(nextTab('Character', step)),
       hotkeys: pickerElement
         ? {
             // In the item list: the highlighted row.
@@ -180,8 +180,8 @@
             f: () => onRow('favorite'),
           }
         : {
-            q: () => ontab('Inventory'),
-            e: () => ontab('Inventory'),
+            q: () => ontab(nextTab('Character', -1)),
+            e: () => ontab(nextTab('Character', 1)),
             // On a tile: X takes the item off, R drops it, F toggles its favourite mark.
             x: () => unequipFocused(),
             r: () => onTileItem('drop'),

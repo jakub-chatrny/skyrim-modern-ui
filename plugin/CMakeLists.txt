@@ -56,6 +56,7 @@ add_commonlibsse_plugin(
         src/Equipment.cpp
         src/Outfits.cpp
         src/Thumbnails.cpp
+        src/Quests.cpp
         src/Snapshot.cpp
         "${CMAKE_CURRENT_BINARY_DIR}/src/version.rc"
     USE_ADDRESS_LIBRARY)
